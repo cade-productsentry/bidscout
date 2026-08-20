@@ -1,0 +1,73 @@
+---
+// No server-side rendering here — this page is built to static HTML.
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BidScout — coming soon</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        max-width: 34rem;
+        margin: 0 auto;
+        padding: 4rem 1.25rem;
+        line-height: 1.5;
+      }
+      h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+      p.tagline { margin-top: 0; opacity: 0.75; }
+      form { display: grid; gap: 0.75rem; margin-top: 2rem; }
+      input, select, button {
+        font: inherit;
+        padding: 0.6rem 0.7rem;
+        border: 1px solid currentColor;
+        border-radius: 0.375rem;
+        background: transparent;
+        color: inherit;
+      }
+      button { cursor: pointer; font-weight: 600; }
+      #status { min-height: 1.5rem; margin-top: 0.75rem; }
+    </style>
+  </head>
+  <body>
+    <h1>BidScout — coming soon</h1>
+    <p class="tagline">Public construction bids, filtered to your trade and state.</p>
+
+    <form id="subscribe">
+      <input type="email" name="email" placeholder="you@example.com" required />
+      <input type="text" name="trade" placeholder="Trade (e.g. electrical)" />
+      <input type="text" name="state" placeholder="State (e.g. TX)" maxlength="2" />
+      <button type="submit">Notify me</button>
+    </form>
+    <p id="status" role="status"></p>
+
+    <script is:inline>
+      const form = document.getElementById('subscribe');
+      const status = document.getElementById('status');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        status.textContent = 'Submitting…';
+
+        const payload = Object.fromEntries(new FormData(form).entries());
+
+        try {
+          // Posts to the Cloudflare Pages Function at web/functions/subscribe.ts
+          const response = await fetch('/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const result = await response.json();
+          status.textContent = response.ok
+            ? "You're on the list."
+            : `Something went wrong: ${result.error ?? response.status}`;
+          if (response.ok) form.reset();
+        } catch {
+          status.textContent = 'Network error — please try again.';
+        }
+      });
+    </script>
+  </body>
+</html>

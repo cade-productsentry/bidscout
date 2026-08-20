@@ -1,0 +1,16 @@
+# Node / Astro
+node_modules/
+dist/
+.astro/
+.wrangler/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets — never commit these
+.env
+.env.*
+!.env.example
