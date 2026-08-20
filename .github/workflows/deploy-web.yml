@@ -1,0 +1,52 @@
+name: deploy-web
+
+# Fallback for the native Cloudflare Pages <-> GitHub integration (which needs
+# the Cloudflare GitHub App installed via the dashboard). Builds web/ and
+# uploads dist/ to the "bidscout" Pages project on every push to main.
+#
+# Required repo secrets:
+#   CLOUDFLARE_API_TOKEN   - API token with "Cloudflare Pages: Edit"
+#   CLOUDFLARE_ACCOUNT_ID  - the account ID shown in the Cloudflare dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build
+        working-directory: web
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: web
+          command: pages deploy dist --project-name=bidscout --branch=main --commit-dirty=true
