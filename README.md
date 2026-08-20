@@ -96,5 +96,5 @@ npm run dev
 
 ## Deployed URLs
 
-- Repo: (filled in below once created)
-- Site: (filled in below once created)
+- Repo: https://github.com/cade-productsentry/bidscout
+- Site: https://bidscout.pages.dev
