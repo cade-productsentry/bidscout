@@ -13,9 +13,12 @@
     "astro": "^7.2.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260820.1"
+    "@cloudflare/workers-types": "^5.20260820.1",
+    "wrangler": "^4.125.0"
   },
   "allowScripts": {
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "esbuild@0.28.1": true,
+    "workerd@1.20260820.1": true
   }
 }
