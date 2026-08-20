@@ -1,0 +1,31 @@
+name: scrape
+
+on:
+  schedule:
+    # Every 6 hours. GitHub may start scheduled runs late under load.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scraper/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r scraper/requirements.txt
+
+      - name: Run scraper
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scraper/main.py
