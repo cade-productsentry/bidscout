@@ -1,59 +1,112 @@
 ---
-// No server-side rendering here — this page is built to static HTML.
+// Static landing page. The form posts to the Pages Function at /subscribe.
+const trades = [
+  ['hvac-plumbing', 'HVAC / Plumbing / Mechanical'],
+  ['electrical', 'Electrical'],
+  ['roofing', 'Roofing'],
+  ['painting', 'Painting'],
+  ['site-work', 'Paving / Fencing / Site work'],
+  ['landscaping', 'Landscaping / Grounds'],
+  ['janitorial', 'Janitorial / Custodial'],
+  ['general-building', 'General building construction'],
+];
+const states = ['AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
 ---
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BidScout — coming soon</title>
+    <title>BidScout — government bids for small trade contractors, triaged weekly</title>
+    <meta name="description" content="A free weekly digest of open federal bids for HVAC, electrical, roofing, painting, landscaping and janitorial contractors — filtered to your trade and state, with a plain-English pursue/skip call on each one." />
     <style>
-      :root { color-scheme: light dark; }
-      body {
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-        max-width: 34rem;
-        margin: 0 auto;
-        padding: 4rem 1.25rem;
-        line-height: 1.5;
-      }
-      h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
-      p.tagline { margin-top: 0; opacity: 0.75; }
-      form { display: grid; gap: 0.75rem; margin-top: 2rem; }
-      input, select, button {
-        font: inherit;
-        padding: 0.6rem 0.7rem;
-        border: 1px solid currentColor;
-        border-radius: 0.375rem;
-        background: transparent;
-        color: inherit;
-      }
-      button { cursor: pointer; font-weight: 600; }
-      #status { min-height: 1.5rem; margin-top: 0.75rem; }
+      :root { color-scheme: light dark; --accent: #1f6feb; }
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 40rem; margin: 0 auto; padding: 3rem 1.25rem 4rem; line-height: 1.55; }
+      header { margin-bottom: 2.5rem; }
+      .brand { font-weight: 700; letter-spacing: .02em; font-size: .95rem; opacity: .7; }
+      h1 { font-size: 2rem; line-height: 1.2; margin: .5rem 0 .75rem; }
+      p.lead { font-size: 1.1rem; opacity: .85; margin-top: 0; }
+      form { display: grid; gap: .75rem; margin-top: 1.5rem; padding: 1.25rem; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: .75rem; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+      input, select, button { font: inherit; padding: .65rem .75rem; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); border-radius: .45rem; background: transparent; color: inherit; width: 100%; }
+      button { cursor: pointer; font-weight: 600; background: var(--accent); color: #fff; border-color: var(--accent); }
+      small.fine { opacity: .65; }
+      #status { min-height: 1.5rem; margin: .5rem 0 0; font-weight: 500; }
+      section { margin-top: 2.5rem; }
+      h2 { font-size: 1.2rem; margin-bottom: .5rem; }
+      ul { padding-left: 1.2rem; }
+      li { margin: .35rem 0; }
+      .tiers { display: grid; gap: .75rem; }
+      .tier { border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: .6rem; padding: .9rem 1rem; }
+      .tier strong { display: block; }
+      .tier .price { float: right; opacity: .75; }
+      footer { margin-top: 3rem; font-size: .85rem; opacity: .65; }
+      @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
-    <h1>BidScout — coming soon</h1>
-    <p class="tagline">Public construction bids, filtered to your trade and state.</p>
+    <header>
+      <div class="brand">BIDSCOUT</div>
+      <h1>Open government bids for your trade, in your state — triaged every week.</h1>
+      <p class="lead">Federal agencies post hundreds of small HVAC, electrical, roofing, painting, grounds and janitorial jobs every week. Most small contractors never see them. BidScout reads them all and sends you only the ones worth your time.</p>
+    </header>
 
     <form id="subscribe">
-      <input type="email" name="email" placeholder="you@example.com" required />
-      <input type="text" name="trade" placeholder="Trade (e.g. electrical)" />
-      <input type="text" name="state" placeholder="State (e.g. TX)" maxlength="2" />
-      <button type="submit">Notify me</button>
+      <label>
+        Work email
+        <input type="email" name="email" placeholder="you@yourcompany.com" required autocomplete="email" />
+      </label>
+      <div class="row">
+        <label>
+          Trade
+          <select name="trade" required>
+            <option value="">Choose…</option>
+            {trades.map(([value, label]) => <option value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>
+          State
+          <select name="state" required>
+            <option value="">Choose…</option>
+            {states.map((s) => <option value={s}>{s}</option>)}
+          </select>
+        </label>
+      </div>
+      <button type="submit">Send me the free weekly digest</button>
+      <small class="fine">Free. One email a week. Unsubscribe with one click.</small>
+      <p id="status" role="status"></p>
     </form>
-    <p id="status" role="status"></p>
+
+    <section>
+      <h2>What's in the digest</h2>
+      <ul>
+        <li>Every open federal solicitation in your trade and state (and neighbouring states on request), pulled from SAM.gov daily.</li>
+        <li>Due date, agency, set-aside (small business, SDVOSB, 8(a)…), and the contracting officer's email — in one line each.</li>
+        <li>A plain-English note on what the job actually is, so you can skip the 40-page PDF when it's not for you.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>When you're ready to bid</h2>
+      <div class="tiers">
+        <div class="tier"><span class="price">Free</span><strong>Digest</strong>Weekly list of open bids for your trade + state.</div>
+        <div class="tier"><span class="price">$99 / month</span><strong>Triage</strong>A one-page summary of every relevant bid with a pursue / skip recommendation, requirements checklist, and deadlines calendar.</div>
+        <div class="tier"><span class="price">$349 / month + per bid</span><strong>Draft</strong>Everything in Triage, plus a first-draft proposal for the bids you choose to pursue, built from your past-performance file.</div>
+      </div>
+    </section>
+
+    <footer>
+      BidScout · hello via <a href="mailto:cade.craft.land@gmail.com?subject=BidScout">email</a> · Bid data is sourced from public SAM.gov notices. BidScout is not affiliated with any government agency.
+    </footer>
 
     <script is:inline>
       const form = document.getElementById('subscribe');
       const status = document.getElementById('status');
-
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         status.textContent = 'Submitting…';
-
         const payload = Object.fromEntries(new FormData(form).entries());
-
         try {
-          // Posts to the Cloudflare Pages Function at web/functions/subscribe.ts
           const response = await fetch('/subscribe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -61,7 +114,7 @@
           });
           const result = await response.json();
           status.textContent = response.ok
-            ? "You're on the list."
+            ? "You're on the list. First digest arrives within a week."
             : `Something went wrong: ${result.error ?? response.status}`;
           if (response.ok) form.reset();
         } catch {

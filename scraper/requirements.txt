@@ -1,6 +1,2 @@
-httpx
-beautifulsoup4
-lxml
-pdfplumber
-psycopg[binary]
-python-dotenv
+# No third-party dependencies: the scraper uses only the Python standard library.
+# (Neon is reached over HTTPS, SAM.gov over HTTPS; no psycopg needed.)

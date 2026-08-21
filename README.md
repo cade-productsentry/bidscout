@@ -1,14 +1,18 @@
 # BidScout
 
-Infrastructure skeleton for BidScout — public construction bids, filtered by trade
-and state. **No product features are built yet**; this repo is the plumbing that
-everything else will sit on. Every service used here is on a free tier.
+BidScout — open government bids for small trade contractors (HVAC, electrical,
+roofing, painting, site work, landscaping, janitorial, general building), filtered
+by trade and state and triaged weekly. Every service used here is on a free tier.
+
+**Status (2026-08-21):** scraper is live against SAM.gov (federal notices, no API
+key needed) and writes to Neon; landing page with digest signup is live. Digest
+sending and triage summaries are next.
 
 ## Layout
 
 | Folder | What it is | Where it runs |
 | --- | --- | --- |
-| `scraper/` | Python 3.12 job that will collect bid postings | GitHub Actions (cron) |
+| `scraper/` | Python 3.12 job that pulls open bids from SAM.gov into Postgres (stdlib only; talks to Neon over HTTPS) | GitHub Actions (cron) |
 | `web/` | Astro static site + email capture form | Cloudflare Pages |
 | `web/functions/` | Cloudflare Pages Function that writes to Postgres | Cloudflare's edge |
 | `db/` | `schema.sql` — the database tables | Neon Postgres |
@@ -42,9 +46,18 @@ The same connection string is stored in two places:
 
 ## 2. Scraper — GitHub Actions
 
-`.github/workflows/scrape.yml` runs `scraper/main.py` on a `0 */6 * * *` cron
-(every 6 hours) and on manual `workflow_dispatch`. It reads `DATABASE_URL` from
-repo secrets.
+`.github/workflows/scrape.yml` runs `scraper/main.py --days 3` on a `0 */6 * * *`
+cron (every 6 hours) and on manual `workflow_dispatch`. It reads `DATABASE_URL`
+from repo secrets.
+
+Sources live in `scraper/sources/`. `sam_gov.py` uses the public JSON endpoints
+behind sam.gov's search UI (`/api/prod/sgs/v1/search/` + `/api/prod/opps/v2/opportunities/{id}`),
+filtered to the NAICS codes in `sam_gov.TRADES`, notice types that can still be
+bid on (no award notices), and modified within `--days`. Notices already refreshed
+in the last 24h are skipped so runs stay short. Flags: `--dry-run`, `--limit N`, `--days N`.
+
+Schema changes go in `db/migrations/NNN_*.sql` (idempotent) and are applied by hand
+through Neon's HTTPS SQL endpoint; `db/schema.sql` is the original base.
 
 Run it by hand from the repo's **Actions** tab → *scrape* → **Run workflow**.
 
