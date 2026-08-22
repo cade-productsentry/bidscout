@@ -1,0 +1,31 @@
+---
+import Base from '../../layouts/Base.astro';
+import SubscribeForm from '../../components/SubscribeForm.astro';
+import { openBids, TRADES, STATES, stateName } from '../../lib/db';
+
+const bids = await openBids();
+const byState = new Map<string, number>();
+for (const b of bids) if (b.state && STATES[b.state]) byState.set(b.state, (byState.get(b.state) ?? 0) + 1);
+const states = [...byState.entries()].sort((a, b) => stateName(a[0]).localeCompare(stateName(b[0])));
+const byTrade = new Map<string, number>();
+for (const b of bids) if (b.trade) byTrade.set(b.trade, (byTrade.get(b.trade) ?? 0) + 1);
+const updated = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+---
+<Base title="Open federal bids for trade contractors, by state and trade — BidScout"
+      description={`${bids.length} open federal solicitations for HVAC, electrical, roofing, painting, site work, landscaping, janitorial and general building contractors, organised by state. Updated ${updated}.`}
+      canonical="/bids/">
+  <h1>Open federal bids for trade contractors</h1>
+  <p class="lead">{bids.length} open solicitations right now across {states.length} states, pulled from SAM.gov and sorted by trade. Pick your state to see what's bidding.</p>
+
+  <SubscribeForm />
+
+  <h2>By state</h2>
+  <ul class="grid">
+    {states.map(([code, n]) => <li><a href={`/bids/${code.toLowerCase()}/`}>{stateName(code)}</a> <small>({n})</small></li>)}
+  </ul>
+
+  <h2>By trade (all states)</h2>
+  <ul class="grid">
+    {Object.entries(TRADES).map(([slug, label]) => <li><a href={`/bids/trade/${slug}/`}>{label}</a> <small>({byTrade.get(slug) ?? 0})</small></li>)}
+  </ul>
+</Base>

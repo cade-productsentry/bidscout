@@ -1,0 +1,24 @@
+---
+import { TRADES, STATES } from '../lib/db';
+interface Props { trade?: string; state?: string; }
+const { trade = '', state = '' } = Astro.props;
+---
+<form id="subscribe" class="sub">
+  <strong>Get these bids in your inbox every Monday — free.</strong>
+  <div class="row">
+    <input type="email" name="email" placeholder="you@yourcompany.com" required autocomplete="email" aria-label="Work email" />
+    <button type="submit">Send me the weekly digest</button>
+  </div>
+  <div class="row" style="grid-template-columns:1fr 1fr">
+    <select name="trade" required aria-label="Trade">
+      <option value="">Trade…</option>
+      {Object.entries(TRADES).map(([v, l]) => <option value={v} selected={v === trade}>{l}</option>)}
+    </select>
+    <select name="state" required aria-label="State">
+      <option value="">State…</option>
+      {Object.entries(STATES).map(([v, l]) => <option value={v} selected={v === state}>{l}</option>)}
+    </select>
+  </div>
+  <small class="fine">One email a week. Unsubscribe with one click.</small>
+  <p id="status" role="status"></p>
+</form>

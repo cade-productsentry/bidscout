@@ -1,0 +1,21 @@
+---
+import Base from '../../../layouts/Base.astro';
+import SubscribeForm from '../../../components/SubscribeForm.astro';
+import BidList from '../../../components/BidList.astro';
+import { openBids, TRADES } from '../../../lib/db';
+
+export async function getStaticPaths() {
+  const bids = await openBids();
+  return Object.keys(TRADES).map((trade) => ({ params: { trade }, props: { trade, bids: bids.filter((b) => b.trade === trade) } }));
+}
+const { trade, bids } = Astro.props;
+const label = TRADES[trade];
+---
+<Base title={`${label} government bids — ${bids.length} open federal solicitations — BidScout`}
+      description={`Every open federal ${label.toLowerCase()} solicitation on SAM.gov right now (${bids.length}), with due dates, agencies and set-asides. Filter by state or get a free weekly digest.`}
+      canonical={`/bids/trade/${trade}/`}>
+  <h1>{label} government bids</h1>
+  <p class="lead">{bids.length} open federal {label.toLowerCase()} solicitations nationwide. Notices with no place of performance listed are included here but not on state pages.</p>
+  <SubscribeForm trade={trade} />
+  <BidList bids={bids} showState />
+</Base>

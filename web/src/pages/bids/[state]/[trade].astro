@@ -1,0 +1,36 @@
+---
+import Base from '../../../layouts/Base.astro';
+import SubscribeForm from '../../../components/SubscribeForm.astro';
+import BidList from '../../../components/BidList.astro';
+import { openBids, TRADES, STATES, stateName } from '../../../lib/db';
+
+export async function getStaticPaths() {
+  const bids = await openBids();
+  const combos = new Map<string, typeof bids>();
+  for (const b of bids) {
+    if (!b.state || !STATES[b.state] || !b.trade || !TRADES[b.trade]) continue;
+    const key = `${b.state}|${b.trade}`;
+    if (!combos.has(key)) combos.set(key, []);
+    combos.get(key)!.push(b);
+  }
+  return [...combos.entries()].map(([key, list]) => {
+    const [state, trade] = key.split('|');
+    return { params: { state: state.toLowerCase(), trade }, props: { code: state, trade, bids: list } };
+  });
+}
+const { code, trade, bids } = Astro.props;
+const name = stateName(code);
+const tradeLabel = TRADES[trade];
+---
+<Base title={`${tradeLabel} bids in ${name} — ${bids.length} open federal solicitations — BidScout`}
+      description={`Open federal ${tradeLabel.toLowerCase()} solicitations in ${name}: ${bids.length} right now. Due dates, contracting agency, set-asides and a plain-English note on each. Free weekly digest.`}
+      canonical={`/bids/${code.toLowerCase()}/${trade}/`}>
+  <h1>{tradeLabel} bids in {name}</h1>
+  <p class="lead">{bids.length} open federal {tradeLabel.toLowerCase()} solicitation{bids.length === 1 ? '' : 's'} in {name}, from SAM.gov. Most are small-business set-asides a local shop can win.</p>
+
+  <SubscribeForm state={code} trade={trade} />
+
+  <BidList bids={bids} />
+
+  <p><a href={`/bids/${code.toLowerCase()}/`}>← All trades in {name}</a> · <a href={`/bids/trade/${trade}/`}>{tradeLabel} bids in every state →</a></p>
+</Base>

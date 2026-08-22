@@ -1,0 +1,80 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  canonical?: string;
+}
+const { title, description, canonical } = Astro.props;
+const site = 'https://bidscout.pages.dev';
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {canonical && <link rel="canonical" href={site + canonical} />}
+    <style is:global>
+      :root { color-scheme: light dark; --accent: #1f6feb; }
+      * { box-sizing: border-box; }
+      body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; line-height: 1.55; }
+      a { color: var(--accent); }
+      nav.top { font-size: .9rem; margin-bottom: 2rem; display: flex; gap: 1rem; align-items: baseline; }
+      nav.top .brand { font-weight: 700; letter-spacing: .02em; opacity: .8; text-decoration: none; color: inherit; }
+      h1 { font-size: 1.8rem; line-height: 1.2; margin: .5rem 0 .75rem; }
+      p.lead { font-size: 1.05rem; opacity: .85; margin-top: 0; }
+      form.sub { display: grid; gap: .6rem; margin: 1.5rem 0; padding: 1rem 1.1rem; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: .75rem; }
+      form.sub .row { display: grid; grid-template-columns: 1fr auto; gap: .6rem; }
+      input, select, button { font: inherit; padding: .6rem .75rem; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); border-radius: .45rem; background: transparent; color: inherit; width: 100%; }
+      button { cursor: pointer; font-weight: 600; background: var(--accent); color: #fff; border-color: var(--accent); white-space: nowrap; }
+      small.fine { opacity: .65; }
+      #status { min-height: 1.2rem; margin: 0; font-weight: 500; }
+      h2 { font-size: 1.2rem; margin: 2rem 0 .5rem; }
+      ul.bids { list-style: none; padding: 0; }
+      ul.bids li { padding: .9rem 0; border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+      ul.bids li:last-child { border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+      .meta { font-size: .88rem; opacity: .75; margin: .15rem 0 .3rem; }
+      .meta b { font-weight: 600; opacity: 1; }
+      .blurb { font-size: .92rem; opacity: .85; margin: 0; }
+      .tag { display: inline-block; font-size: .75rem; padding: .05rem .45rem; border-radius: .4rem; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); margin-left: .35rem; vertical-align: middle; }
+      ul.grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: .4rem .9rem; }
+      footer { margin-top: 3rem; font-size: .85rem; opacity: .65; }
+      @media (max-width: 520px) { form.sub .row { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <nav class="top">
+      <a class="brand" href="/">BIDSCOUT</a>
+      <a href="/bids/">All open bids</a>
+    </nav>
+    <slot />
+    <footer>
+      BidScout · hello via <a href="mailto:cade.craft.land@gmail.com?subject=BidScout">email</a> · Bid data is sourced from public SAM.gov notices and refreshed several times a day. BidScout is not affiliated with any government agency. Always confirm details on the official notice before bidding.
+    </footer>
+    <script is:inline>
+      const form = document.getElementById('subscribe');
+      if (form) {
+        const status = document.getElementById('status');
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          status.textContent = 'Submitting…';
+          const payload = Object.fromEntries(new FormData(form).entries());
+          try {
+            const response = await fetch('/subscribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+            status.textContent = response.ok
+              ? "You're on the list. First digest arrives within a week."
+              : `Something went wrong: ${result.error ?? response.status}`;
+            if (response.ok) form.reset();
+          } catch {
+            status.textContent = 'Network error — please try again.';
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

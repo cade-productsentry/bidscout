@@ -1,0 +1,23 @@
+---
+import { fmtDate, blurb, stateName, TRADES } from '../lib/db';
+import type { BidRow } from '../lib/db';
+interface Props { bids: BidRow[]; showState?: boolean; showTrade?: boolean; }
+const { bids, showState = false, showTrade = false } = Astro.props;
+---
+<ul class="bids">
+  {bids.map((b) => (
+    <li>
+      <a href={b.url} rel="nofollow noopener" target="_blank">{b.title}</a>
+      {b.set_aside && <span class="tag">{b.set_aside}</span>}
+      <div class="meta">
+        <b>Due {fmtDate(b.due_at)}</b>
+        {b.agency && <> · {b.agency}</>}
+        {(showState && b.state) && <> · {stateName(b.state)}{b.city ? `, ${b.city}` : ''}</>}
+        {(!showState && b.city) && <> · {b.city}</>}
+        {(showTrade && b.trade) && <> · {TRADES[b.trade] ?? b.trade}</>}
+        {b.notice_type && <> · {b.notice_type}</>}
+      </div>
+      {b.raw_text && <p class="blurb">{blurb(b.raw_text)}</p>}
+    </li>
+  ))}
+</ul>

@@ -4,9 +4,11 @@ BidScout — open government bids for small trade contractors (HVAC, electrical,
 roofing, painting, site work, landscaping, janitorial, general building), filtered
 by trade and state and triaged weekly. Every service used here is on a free tier.
 
-**Status (2026-08-21):** scraper is live against SAM.gov (federal notices, no API
-key needed) and writes to Neon; landing page with digest signup is live. Digest
-sending and triage summaries are next.
+**Status (2026-08-22):** scraper is live against SAM.gov (federal notices, no API
+key needed) and writes to Neon; landing page with digest signup is live;
+`/bids/{state}/{trade}/` SEO pages (≈230) are generated from the database at
+build time and rebuilt twice a day; `scraper/digest.py` renders the weekly
+digest text. Digest sending (from the ops mailbox) and triage summaries are next.
 
 ## Layout
 
@@ -59,7 +61,11 @@ in the last 24h are skipped so runs stay short. Flags: `--dry-run`, `--limit N`,
 Schema changes go in `db/migrations/NNN_*.sql` (idempotent) and are applied by hand
 through Neon's HTTPS SQL endpoint; `db/schema.sql` is the original base.
 
-Run it by hand from the repo's **Actions** tab → *scrape* → **Run workflow**.
+`scraper/digest.py` renders the weekly digest (one per subscriber, or
+`--trade X --state YY` for a preview) from the same table. It only prints text;
+the operator sends it from the BidScout mailbox.
+
+Run the scraper by hand from the repo's **Actions** tab → *scrape* → **Run workflow**.
 
 Local development:
 
@@ -92,6 +98,16 @@ route — `functions/subscribe.ts` becomes `POST /subscribe`.
 The form on the index page posts `{ email, trade, state }` there as JSON, and the
 function inserts a row into `subscribers`. Re-subscribing with the same email
 updates the stored trade/state rather than erroring.
+
+### Programmatic SEO pages
+
+`web/src/lib/db.ts` queries Neon **at build time** (the deploy workflow passes
+`DATABASE_URL` into `npm run build`) and `src/pages/bids/**` turns the rows into
+static pages: `/bids/` (index), `/bids/tx/` (state), `/bids/tx/electrical/`
+(state × trade) and `/bids/trade/electrical/` (trade, all states), plus
+`/sitemap.xml` and `robots.txt`. Without `DATABASE_URL` the pages build empty.
+The deploy workflow also runs on a 05:30/17:30 UTC schedule so listings and
+due dates stay fresh between code pushes.
 
 ### Why the Neon serverless driver?
 

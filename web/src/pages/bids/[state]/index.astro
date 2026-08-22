@@ -1,0 +1,33 @@
+---
+import Base from '../../../layouts/Base.astro';
+import SubscribeForm from '../../../components/SubscribeForm.astro';
+import BidList from '../../../components/BidList.astro';
+import { openBids, TRADES, STATES, stateName } from '../../../lib/db';
+
+export async function getStaticPaths() {
+  const bids = await openBids();
+  const states = new Set(bids.map((b) => b.state).filter((s): s is string => !!s && !!STATES[s]));
+  return [...states].map((s) => ({ params: { state: s.toLowerCase() }, props: { code: s, bids: bids.filter((b) => b.state === s) } }));
+}
+const { code, bids } = Astro.props;
+const name = stateName(code);
+const byTrade = new Map<string, number>();
+for (const b of bids) if (b.trade) byTrade.set(b.trade, (byTrade.get(b.trade) ?? 0) + 1);
+const trades = Object.entries(TRADES).filter(([slug]) => byTrade.has(slug));
+---
+<Base title={`Open government bids in ${name} for trade contractors (${bids.length}) — BidScout`}
+      description={`${bids.length} open federal solicitations in ${name} for HVAC, electrical, roofing, painting, site work, landscaping, janitorial and general building contractors. Due dates, agencies and set-asides, updated daily.`}
+      canonical={`/bids/${code.toLowerCase()}/`}>
+  <h1>Open government bids in {name}</h1>
+  <p class="lead">{bids.length} open federal solicitations with a place of performance in {name}. Narrow it to your trade, or get the weekly digest for your trade and state.</p>
+
+  <SubscribeForm state={code} />
+
+  <h2>By trade in {name}</h2>
+  <ul class="grid">
+    {trades.map(([slug, label]) => <li><a href={`/bids/${code.toLowerCase()}/${slug}/`}>{label}</a> <small>({byTrade.get(slug)})</small></li>)}
+  </ul>
+
+  <h2>All open bids in {name}</h2>
+  <BidList bids={bids} showTrade />
+</Base>
