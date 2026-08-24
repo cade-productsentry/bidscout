@@ -1,0 +1,84 @@
+---
+import Base from '../layouts/Base.astro';
+// A real triage, prepared 2026-08-23 from a live SAM.gov solicitation, shown as
+// a sample of the paid Triage tier. Update occasionally so the bid stays recent.
+---
+<Base
+  title="Sample bid triage — BidScout"
+  description="A real one-page BidScout triage of a live federal roofing solicitation: verdict, scoring, deadlines, gotchas, and next actions."
+  canonical="/sample-triage/"
+>
+  <style>
+    .verdict { display: inline-block; font-weight: 700; padding: .15rem .6rem; border-radius: .45rem; background: color-mix(in srgb, #2da44e 18%, transparent); border: 1px solid #2da44e; }
+    dl.facts { display: grid; grid-template-columns: auto 1fr; gap: .25rem .9rem; margin: 1rem 0; font-size: .95rem; }
+    dl.facts dt { font-weight: 600; opacity: .75; }
+    dl.facts dd { margin: 0; }
+    table.score { border-collapse: collapse; width: 100%; margin: .5rem 0 1rem; font-size: .95rem; }
+    table.score td, table.score th { text-align: left; padding: .35rem .5rem; border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+    table.score td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    .note { font-size: .85rem; opacity: .7; }
+    ol li, ul li { margin: .3rem 0; }
+  </style>
+
+  <p class="note">This is a real triage of a live solicitation, exactly as a Triage-tier
+  client receives it (one page per bid, scored against <em>their</em> company profile —
+  here we assume a small Ohio-area roofing contractor). Prepared 2026-08-23.</p>
+
+  <h1>B101 and B136 Roof Repairs — 180th Fighter Wing</h1>
+  <p><span class="verdict">PURSUE · 16/20</span></p>
+  <p><strong>Why:</strong> 100% small-business set-aside roof repair with a clear
+  two-phase scope, quotes rather than full proposals, and a fast 60-day job.</p>
+
+  <dl class="facts">
+    <dt>Buyer</dt><dd>Dept of Defense / Ohio Air National Guard, 180th Fighter Wing (Swanton, OH — Toledo area)</dd>
+    <dt>Due</dt><dd>Aug 31, 2026, 10:00 AM ET</dd>
+    <dt>Work window</dt><dd>Start within 10 days of notice to proceed; complete within 60 days</dd>
+    <dt>Est. value</dt><dd>Not stated (scope suggests low six figures)</dd>
+    <dt>Set-aside</dt><dd>100% Small Business — NAICS 238160 (Roofing Contractors)</dd>
+    <dt>Notice</dt><dd><a href="https://sam.gov/opp/a4b1b30606614254ae20de9e52822c15/view" rel="nofollow">View on SAM.gov</a></dd>
+  </dl>
+
+  <h2>What the job actually is</h2>
+  <p>Firm fixed-price commercial construction. <strong>Phase 1</strong> repairs Bldg 101's
+  flat/standing-seam roof: eave gutter details, a downspout, curb and sanitary-stack
+  re-seals, roughly 1,300 feet of seam repair, and 30 walk mats. <strong>Phase 2</strong>
+  decommissions Bldg 136's rooftop solar array — demo the panels, cable tray, and
+  electrical back to the inverter — then patches the membrane. All labor, materials,
+  equipment, and supervision included.</p>
+
+  <h2>Scoring</h2>
+  <table class="score">
+    <tr><td>Fit to trade &amp; size — pure roofing repair; set-aside keeps large primes out</td><td>5/5</td></tr>
+    <tr><td>Competition pressure — repair scope narrows the field; two amendments show some engagement</td><td>4/5</td></tr>
+    <tr><td>Effort to bid — RFQ on SF-1442, Q&amp;A already answered and attached</td><td>4/5</td></tr>
+    <tr><td>Margin signal — membrane condition under the solar rows is the unknown</td><td>3/5</td></tr>
+    <tr><th>Total</th><th>16/20 → PURSUE</th></tr>
+  </table>
+
+  <h2>Deadlines &amp; gotchas</h2>
+  <ul>
+    <li><strong>Two amendments</strong> (Aug 6, Aug 17) — your quote must acknowledge both in section 19 or it can be rejected.</li>
+    <li>Amendment 2 added clause 52.223-2 (biobased-product reporting) and set the 10-day performance start.</li>
+    <li>Davis-Bacon prevailing wages apply — check the attached wage determination before pricing labor.</li>
+    <li>SAM.gov registration must be active at time of quote.</li>
+    <li>Phase 2 includes electrical demolition — line up a licensed electrician sub if that's not in-house.</li>
+  </ul>
+
+  <h2>If you pursue: next three actions</h2>
+  <ol>
+    <li><strong>Today:</strong> download the amended package, Q&amp;A, and new SF-1442 from SAM.gov; confirm SAM registration is active.</li>
+    <li><strong>By Aug 26:</strong> walk the seam/gutter quantities against the SOW; get an electrician's quote for the Phase 2 demo.</li>
+    <li><strong>By Aug 28:</strong> price both phases, complete the SF-1442 acknowledging both amendments in section 19, and submit before the deadline.</li>
+  </ol>
+
+  <p class="note">Every claim above is traceable to the public solicitation. Verify dates
+  and requirements against the posted documents before bidding.</p>
+
+  <section>
+    <h2>Want this for every bid in your trade and state?</h2>
+    <p>The free digest lists what's open. The <strong>Triage tier</strong> sends a page like
+    this for each one, scored against <em>your</em> crew size, bonding, certifications, and
+    travel radius — so you spend estimating hours only on bids you can win.
+    <a href="/">Start with the free weekly digest</a> and reply to any issue to ask about Triage.</p>
+  </section>
+</Base>

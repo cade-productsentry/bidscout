@@ -4,7 +4,7 @@ import { openBids, TRADES, STATES } from '../lib/db';
 export const GET: APIRoute = async () => {
   const site = 'https://bidscout.pages.dev';
   const bids = await openBids();
-  const urls = new Set<string>(['/', '/bids/']);
+  const urls = new Set<string>(['/', '/bids/', '/sample-triage/']);
   for (const t of Object.keys(TRADES)) urls.add(`/bids/trade/${t}/`);
   for (const b of bids) {
     if (!b.state || !STATES[b.state]) continue;
