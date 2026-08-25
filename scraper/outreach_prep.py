@@ -45,6 +45,13 @@ SITE = "https://bidscout.pages.dev"
 # Required in every commercial email — see COMPLIANCE note above.
 POSTAL_ADDRESS = os.environ.get("BIDSCOUT_POSTAL_ADDRESS", "").strip()
 
+# Deep links into /bids/{state}/{trade}/ are OFF until those pages verifiably
+# render real listings. They shipped empty from 2026-08-22 (see the deploy fix)
+# and pointing a prospect at a page that does not deliver what the sentence
+# promised is worse than not linking at all. Set BIDSCOUT_DEEP_LINKS=1 once
+# https://bidscout.pages.dev/bids/tx/general-building/ shows actual bids.
+DEEP_LINKS = os.environ.get("BIDSCOUT_DEEP_LINKS", "0") == "1"
+
 TRADE_LABEL = {
     "hvac-plumbing": "HVAC / plumbing",
     "electrical": "electrical",
@@ -57,7 +64,7 @@ TRADE_LABEL = {
 }
 
 # Minimum open bids in the home state before we lead with a state-specific hook.
-STATE_HOOK_MIN = 2
+STATE_HOOK_MIN = 1
 # Minimum in the surrounding region before we fall back to a regional hook.
 REGION_HOOK_MIN = 3
 
@@ -123,26 +130,74 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
     cols = ("SELECT title, agency, city, state, due_at::text, url, set_aside FROM bids "
             "WHERE trade = $1 AND due_at > now()")
     rows = []
-    # Two passes: actionable-and-substantive first, then anything open.
-    for extra in (ACTIONABLE, ""):
-        if ctx["state_count"]:
+    ctx["example_scope"] = "national"
+    # Home state first and hardest: the volume sentence promises an in-state
+    # bid, so showing an out-of-state one instead reads as a contradiction.
+    # Only widen once the home state is genuinely exhausted.
+    if ctx["state_count"]:
+        for extra in (ACTIONABLE, ""):
             rows = db.query(cols + extra + " AND state = $2 ORDER BY due_at ASC LIMIT 1",
                             [trade, st])
-            ctx["example_scope"] = "state"
-        if not rows and members and ctx["region_count"]:
-            placeholders = ", ".join(f"${i + 2}" for i in range(len(members)))
+            if rows:
+                ctx["example_scope"] = "state"
+                break
+    if not rows and members and ctx["region_count"]:
+        placeholders = ", ".join(f"${i + 2}" for i in range(len(members)))
+        for extra in (ACTIONABLE, ""):
             rows = db.query(
                 cols + extra + f" AND state IN ({placeholders}) ORDER BY due_at ASC LIMIT 1",
                 [trade] + members,
             )
-            ctx["example_scope"] = "region"
-        if not rows:
+            if rows:
+                ctx["example_scope"] = "region"
+                break
+    if not rows:
+        for extra in (ACTIONABLE, ""):
             rows = db.query(cols + extra + " ORDER BY due_at ASC LIMIT 1", [trade])
-            ctx["example_scope"] = "national"
-        if rows:
-            break
+            if rows:
+                ctx["example_scope"] = "national"
+                break
     ctx["example"] = rows[0] if rows else None
     return ctx
+
+
+def clean_agency(raw: str | None) -> str:
+    """SAM stores agency as e.g. 'AGRICULTURE, DEPARTMENT OF / USDA-FS, CSA 8'.
+    Render something a contractor would recognise instead of the raw string."""
+    if not raw:
+        return "a federal agency"
+    head = raw.split("/")[0].strip().rstrip(".,")
+    up = head.upper()
+
+    KNOWN = {
+        "DEPT OF DEFENSE": "Dept. of Defense",
+        "DEFENSE, DEPARTMENT OF": "Dept. of Defense",
+        "AGRICULTURE, DEPARTMENT OF": "USDA",
+        "VETERANS AFFAIRS, DEPARTMENT OF": "the VA",
+        "JUSTICE, DEPARTMENT OF": "Dept. of Justice",
+        "INTERIOR, DEPARTMENT OF THE": "Dept. of the Interior",
+        "HOMELAND SECURITY, DEPARTMENT OF": "DHS",
+        "GENERAL SERVICES ADMINISTRATION": "GSA",
+        "ENVIRONMENTAL PROTECTION AGENCY": "the EPA",
+        "TRANSPORTATION, DEPARTMENT OF": "Dept. of Transportation",
+        "HEALTH AND HUMAN SERVICES, DEPARTMENT OF": "HHS",
+        "STATE, DEPARTMENT OF": "the State Dept.",
+        "COMMERCE, DEPARTMENT OF": "Dept. of Commerce",
+        "TREASURY, DEPARTMENT OF": "Treasury",
+    }
+    if up in KNOWN:
+        return KNOWN[up]
+
+    # Generic "<NAME>, DEPARTMENT OF [THE]" -> "Dept. of [the] <Name>"
+    if ", DEPARTMENT OF" in up:
+        name, _, tail = head.partition(",")
+        article = " the" if tail.upper().strip().endswith("THE") else ""
+        return f"Dept. of{article} {name.title()}"
+    if up.startswith("DEPT OF "):
+        return "Dept. of " + head[8:].title()
+
+    ACRONYMS = {"VA", "GSA", "EPA", "DHS", "HHS", "NASA", "USDA", "DOD", "FAA", "NIH"}
+    return " ".join(w if w.upper() in ACRONYMS else w.title() for w in head.split())
 
 
 def days_out(due_iso: str | None) -> int | None:
@@ -164,11 +219,19 @@ def build_email(p: dict, ctx: dict) -> dict:
     greeting = f"Hi {p['first_name']}," if p.get("first_name") else "Hi there,"
 
     if st and ctx["state_count"] >= STATE_HOOK_MIN:
-        subject = f"{ctx['state_count']} open federal {trade_label} bids in {st} — thought of {company}"
-        volume = (
-            f"Right now there are {ctx['state_count']} open {trade_label} solicitations in {st}, "
-            f"and {ctx['national_count']} nationwide."
-        )
+        n = ctx["state_count"]
+        if n == 1:
+            subject = f"An open federal {trade_label} bid in {st} — thought of {company}"
+            volume = (
+                f"There's one open {trade_label} solicitation in {st} right now, "
+                f"plus {ctx['national_count']} nationwide."
+            )
+        else:
+            subject = f"{n} open federal {trade_label} bids in {st} — thought of {company}"
+            volume = (
+                f"Right now there are {n} open {trade_label} solicitations in {st}, "
+                f"and {ctx['national_count']} nationwide."
+            )
     elif ctx.get("region_name") and ctx["region_count"] >= REGION_HOOK_MIN:
         subject = (f"{ctx['region_count']} open federal {trade_label} bids near {st} — "
                    f"thought of {company}")
@@ -208,20 +271,28 @@ def build_email(p: dict, ctx: dict) -> dict:
         f"BidScout · {POSTAL_ADDRESS}"
     )
 
+    cta_line = f"See what's open in your area: {link}\n\n" if DEEP_LINKS else ""
+
     ex = ctx.get("example")
     if ex:
         d = days_out(ex.get("due_at"))
         due_txt = (ex.get("due_at") or "")[:10]
         when = f"due {due_txt}" + (f", {d} days out" if d is not None and d >= 0 else "")
         ex_where = ", ".join(x for x in (ex.get("city"), ex.get("state")) if x)
-        lead = {
-            "state": "One in your state right now:",
-            "region": "One nearby right now:",
-        }.get(ctx.get("example_scope"), "One that's open right now:")
+        if ctx.get("example_scope") == "state" and ctx["state_count"] == 1:
+            lead = "Here it is:"   # we just said there is exactly one - don't repeat
+        else:
+            lead = {
+                "state": "One in your state right now:",
+                "region": "One nearby right now:",
+            }.get(ctx.get("example_scope"), "One that's open right now:")
+        title = ex["title"].strip()
         ex_line = (
-            f'{lead} "{ex["title"].strip()}" '
-            f'({ex["agency"]}{", " + ex_where if ex_where else ""}, {when}).'
+            f'{lead} "{title}" '
+            f'({clean_agency(ex.get("agency"))}{", " + ex_where if ex_where else ""}, {when}).'
         )
+        if not DEEP_LINKS and ex.get("url"):
+            ex_line += f"\n{ex['url']}"
     else:
         ex_line = ""
 
@@ -234,9 +305,7 @@ BidScout watches SAM.gov for small {trade_label} contractors. Every Monday we se
 {volume}
 {ex_line}
 
-See what's open in your area: {link}
-
-Want the Monday digest? It's free — just reply "yes" or sign up at {SITE}. And since you're clearly bidding already: your first month of Triage is on us, no card, no strings.
+{cta_line}Want the Monday digest? It's free — just reply "yes" or sign up at {SITE}. And since you're clearly bidding already: your first month of Triage is on us, no card, no strings.
 
 If federal bids aren't a fit, tell us and we won't email again.
 
