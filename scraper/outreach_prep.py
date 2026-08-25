@@ -20,6 +20,13 @@ and optionally first_name, agency, scope. Prospects without an email, or marked
 skip:true, are reported as unsendable instead of rendered.
 
 Nothing here sends mail. Output is text for a human/operator review step.
+
+COMPLIANCE (CAN-SPAM, 15 U.S.C. 7704): every commercial email must carry a valid
+physical postal address, and the law makes no exception for business-to-business
+mail. Penalties run to tens of thousands of dollars PER MESSAGE. This script
+therefore fails closed: set BIDSCOUT_POSTAL_ADDRESS (a street address, a USPS
+PO box, or a private mailbox registered with a commercial mail receiving agency)
+or it will refuse to produce sendable drafts. Do not work around this check.
 """
 
 from __future__ import annotations
@@ -34,6 +41,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 from neon_http import Neon  # noqa: E402
 
 SITE = "https://bidscout.pages.dev"
+
+# Required in every commercial email — see COMPLIANCE note above.
+POSTAL_ADDRESS = os.environ.get("BIDSCOUT_POSTAL_ADDRESS", "").strip()
 
 TRADE_LABEL = {
     "hvac-plumbing": "HVAC / plumbing",
@@ -192,6 +202,12 @@ def build_email(p: dict, ctx: dict) -> dict:
             f"actually winning federal work."
         )
 
+    footer = (
+        f"You received this because {company} appears in public federal award records. "
+        f"Reply \"stop\" and we'll remove you immediately.\n"
+        f"BidScout · {POSTAL_ADDRESS}"
+    )
+
     ex = ctx.get("example")
     if ex:
         d = days_out(ex.get("due_at"))
@@ -226,6 +242,8 @@ If federal bids aren't a fit, tell us and we won't email again.
 
 — BidScout
 {SITE}
+
+{footer}
 """
     return {"to": p.get("email"), "subject": subject, "body": body.strip()}
 
@@ -254,6 +272,18 @@ def main() -> int:
     ap.add_argument("--scope", default="")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     args = ap.parse_args()
+
+    if not POSTAL_ADDRESS:
+        print(
+            "REFUSING TO RENDER SENDABLE DRAFTS: BIDSCOUT_POSTAL_ADDRESS is not set.\n"
+            "CAN-SPAM requires a valid physical postal address in every commercial\n"
+            "email, including B2B, with penalties up to ~$53,000 per message. Get a\n"
+            "mailing address on file (street address, USPS PO box, or CMRA private\n"
+            "mailbox), set BIDSCOUT_POSTAL_ADDRESS, and re-run. Do not hand-edit the\n"
+            "footer to bypass this.",
+            file=sys.stderr,
+        )
+        return 2
 
     db = Neon(os.environ["DATABASE_URL"])
 
