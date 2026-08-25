@@ -14,3 +14,7 @@ venv/
 .env
 .env.*
 !.env.example
+
+# Prospect/outreach data is PII and this repo is public — never commit it.
+prospects*.json
+outreach_batch*.json
