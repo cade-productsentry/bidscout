@@ -58,6 +58,11 @@ filtered to the NAICS codes in `sam_gov.TRADES`, notice types that can still be
 bid on (no award notices), and modified within `--days`. Notices already refreshed
 in the last 24h are skipped so runs stay short. Flags: `--dry-run`, `--limit N`, `--days N`.
 
+`scraper/geo.py` fills in `state` when SAM.gov's place of performance has no
+state code (about a third of notices): ZIP prefix first, then a "City, ST 12345"
+address or a single spelled-out state name in the text; overseas work stays NULL.
+`scraper/backfill_state.py` applies the same logic to rows already stored.
+
 Schema changes go in `db/migrations/NNN_*.sql` (idempotent) and are applied by hand
 through Neon's HTTPS SQL endpoint; `db/schema.sql` is the original base.
 

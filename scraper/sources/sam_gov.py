@@ -27,6 +27,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Iterator
 
+import os as _os
+import sys as _sys
+
+_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+from geo import infer_state  # noqa: E402
+
 SEARCH_URL = "https://sam.gov/api/prod/sgs/v1/search/"
 DETAIL_URL = "https://sam.gov/api/prod/opps/v2/opportunities/{id}"
 VIEW_URL = "https://sam.gov/opp/{id}/view"
@@ -161,16 +167,21 @@ def to_bid(result: dict, det: dict) -> Bid:
     due = (sol.get("deadlines") or {}).get("response") or result.get("responseDateActual") or result.get("responseDate")
     desc_parts = [d.get("body") for d in (det.get("description") or []) if d.get("body")]
     notice_code = (result.get("type") or {}).get("code") or d2.get("type")
-    state = (pop.get("state") or {}).get("code")
+    title = (result.get("title") or d2.get("title") or "").strip()[:500]
+    raw_text = _strip_html("\n".join(desc_parts))
+    # placeOfPerformance is empty on roughly a third of notices; fall back to the
+    # ZIP, then to an address or a single state name in the text (see geo.py).
+    inferred = infer_state(pop, title, raw_text)
+    state = inferred.state if inferred else None
     return Bid(
         source="sam.gov",
         source_id=result["_id"],
         url=VIEW_URL.format(id=result["_id"]),
-        title=(result.get("title") or d2.get("title") or "").strip()[:500],
+        title=title,
         agency=_org_name(result),
         trade=trade,
         naics=naics,
-        state=state.upper() if state else None,
+        state=state,
         county=None,
         city=(pop.get("city") or {}).get("name"),
         notice_type=NOTICE_TYPES.get(notice_code or "", notice_code),
@@ -178,7 +189,7 @@ def to_bid(result: dict, det: dict) -> Bid:
         posted_at=result.get("publishDate") or det.get("postedDate"),
         due_at=due,
         poc_email=poc_email,
-        raw_text=_strip_html("\n".join(desc_parts)),
+        raw_text=raw_text,
     )
 
 
