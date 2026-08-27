@@ -10,6 +10,12 @@ only produces the text so the heartbeat session can paste/send it.
 
 Rules: open bids only (due in the future), the subscriber's trade, their state
 plus nationwide/unspecified-location notices, soonest deadline first, max 15.
+
+COMPLIANCE: the digest is commercial email under CAN-SPAM even though people
+opted in, so every copy carries the postal address and an opt-out line. The
+address comes from BIDSCOUT_POSTAL_ADDRESS (it is deliberately not in this
+public repo). Without it the script prints previews only and exits non-zero,
+so nothing missing the footer is ever pasted into Gmail. Do not bypass this.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from neon_http import Neon  # noqa: E402
 
 SITE = "https://bidscout.pages.dev"
+POSTAL_ADDRESS = os.environ.get("BIDSCOUT_POSTAL_ADDRESS", "").strip()
 
 TRADE_LABEL = {
     "hvac-plumbing": "HVAC / Plumbing / Mechanical",
@@ -93,7 +100,9 @@ def build(db: Neon, trade: str, state: str, limit: int = 15) -> dict:
         "Want a one-page pursue/skip call on each of these, with the requirements checklist pulled out of the PDF? Reply \"triage\" and we'll set you up ($99/mo, cancel any time).",
         "",
         "— BidScout",
-        "Reply \"stop\" to unsubscribe.",
+        f"You're getting this because you subscribed at {SITE} for {label} bids in {state}. "
+        "Reply \"stop\" or \"unsubscribe\" and you're off the list immediately, no questions.",
+        f"BidScout · {POSTAL_ADDRESS or '[POSTAL ADDRESS MISSING - DO NOT SEND]'}",
     ]
     return {"trade": trade, "state": state, "count": len(rows), "subject": f"[BidScout] {len(rows)} open {label} bids — {state}, week of {datetime.now(timezone.utc):%b %d}", "body": "\n".join(lines)}
 
@@ -118,6 +127,13 @@ def main() -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
     db = Neon(os.environ.get("DATABASE_URL", ""))
+    if not POSTAL_ADDRESS:
+        print(
+            "WARNING: BIDSCOUT_POSTAL_ADDRESS is not set. Rendering PREVIEWS ONLY; the footer\n"
+            "is marked DO NOT SEND. CAN-SPAM requires a postal address in every commercial\n"
+            "email. Set the variable and re-run before sending anything.",
+            file=sys.stderr,
+        )
 
     targets: list[tuple[str | None, str, str]] = []
     if args.trade and args.state:
@@ -135,7 +151,7 @@ def main() -> int:
             print(f"=== {email or '(preview)'} ===\nSubject: {d['subject']}\n\n{d['body']}\n")
     if args.json:
         print(json.dumps(out, indent=2))
-    return 0
+    return 0 if POSTAL_ADDRESS else 2
 
 
 if __name__ == "__main__":
