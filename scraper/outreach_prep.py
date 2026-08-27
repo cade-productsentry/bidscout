@@ -45,12 +45,12 @@ SITE = "https://bidscout.pages.dev"
 # Required in every commercial email — see COMPLIANCE note above.
 POSTAL_ADDRESS = os.environ.get("BIDSCOUT_POSTAL_ADDRESS", "").strip()
 
-# Deep links into /bids/{state}/{trade}/ are OFF until those pages verifiably
-# render real listings. They shipped empty from 2026-08-22 (see the deploy fix)
-# and pointing a prospect at a page that does not deliver what the sentence
-# promised is worse than not linking at all. Set BIDSCOUT_DEEP_LINKS=1 once
-# https://bidscout.pages.dev/bids/tx/general-building/ shows actual bids.
-DEEP_LINKS = os.environ.get("BIDSCOUT_DEEP_LINKS", "0") == "1"
+# Deep links into /bids/{state}/{trade}/ are ON by default since 2026-08-27:
+# those pages are now server-rendered from Neon (web/functions/) and verified
+# to show real listings. They were empty 2026-08-22 → 08-27, hence the switch.
+# Set BIDSCOUT_DEEP_LINKS=0 to fall back to linking only the sam.gov notice
+# (do that if a spot check of the page for the prospect's state comes up empty).
+DEEP_LINKS = os.environ.get("BIDSCOUT_DEEP_LINKS", "1") == "1"
 
 TRADE_LABEL = {
     "hvac-plumbing": "HVAC / plumbing",
@@ -291,7 +291,8 @@ def build_email(p: dict, ctx: dict) -> dict:
             f'{lead} "{title}" '
             f'({clean_agency(ex.get("agency"))}{", " + ex_where if ex_where else ""}, {when}).'
         )
-        if not DEEP_LINKS and ex.get("url"):
+        # Always show the official notice URL: it is the proof the example is real.
+        if ex.get("url"):
             ex_line += f"\n{ex['url']}"
     else:
         ex_line = ""
