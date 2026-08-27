@@ -132,3 +132,22 @@ npm run dev
 
 - Repo: https://github.com/cade-productsentry/bidscout
 - Site: https://bidscout.pages.dev
+
+## Server-rendered /bids/ pages (2026-08-27)
+
+The `/bids/`, `/bids/{state}/`, `/bids/{state}/{trade}/`, `/bids/trade/{trade}/`
+pages and `/sitemap.xml` are Cloudflare Pages Functions (`web/functions/`),
+rendered at request time from Neon and edge-cached for an hour. The static
+Astro versions under `web/src/pages/bids/` still build but are superseded by
+the functions, because the deploy workflow does not pass `DATABASE_URL` into
+the build and so the static build has no bid data. Pages already has
+`DATABASE_URL` configured for `/subscribe`, which is what the functions use.
+Local check: `cd web && npm run build && npx wrangler pages dev dist --binding DATABASE_URL=...`.
+
+## Scraper run log
+
+Every `scraper/main.py` run inserts a row into `scraper_runs` (runner, status
+ok/partial/failed, upserted, skipped, error text). If no row appears for a
+scheduled slot, the GitHub Actions cron did not run at all; if the row says
+failed, the error column has the traceback. One NAICS code failing no longer
+aborts the other trades (`sam_gov._search_tolerant`).

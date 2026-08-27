@@ -193,14 +193,37 @@ def to_bid(result: dict, det: dict) -> Bid:
     )
 
 
-def fetch(since_days: int = 2, known_ids: set[str] | None = None, limit: int | None = None) -> Iterator[Bid]:
-    """Yield new/updated bids across all tracked NAICS codes."""
+def _search_tolerant(naics: str, since: datetime, errors: list[str]) -> Iterator[dict]:
+    """search() that records a failure instead of aborting the whole run.
+
+    One NAICS code failing (sam.gov throttling, a 403 from a bot filter, a
+    timeout) should not cost us the other seven trades.
+    """
+    try:
+        yield from search(naics, since)
+    except Exception as exc:  # noqa: BLE001
+        msg = f"naics {naics}: {exc}"
+        print("  " + msg)
+        errors.append(msg)
+
+
+def fetch(
+    since_days: int = 2,
+    known_ids: set[str] | None = None,
+    limit: int | None = None,
+    errors: list[str] | None = None,
+) -> Iterator[Bid]:
+    """Yield new/updated bids across all tracked NAICS codes.
+
+    Source failures are appended to `errors` (if given) rather than raised.
+    """
     known_ids = known_ids or set()
+    errors = errors if errors is not None else []
     since = datetime.now(timezone.utc) - timedelta(days=since_days)
     seen: set[str] = set()
     count = 0
     for naics in TRADES:
-        for r in search(naics, since):
+        for r in _search_tolerant(naics, since, errors):
             opp_id = r.get("_id")
             if not opp_id or opp_id in seen:
                 continue
