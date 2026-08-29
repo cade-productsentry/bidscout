@@ -20,7 +20,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(__file__))
-from geo import infer_state, state_from_text  # noqa: E402
+from geo import infer_state  # noqa: E402
 from neon_http import Neon  # noqa: E402
 from sources import sam_gov  # noqa: E402
 
@@ -34,7 +34,7 @@ def main() -> int:
 
     db = Neon(os.environ.get("DATABASE_URL", ""))
     rows = db.query(
-        "select id, source_id, title, raw_text from bids "
+        "select id, source_id, title, raw_text, agency from bids "
         "where state is null and source = 'sam.gov' and (due_at is null or due_at >= now()) "
         "order by updated_at desc"
     )
@@ -53,9 +53,7 @@ def main() -> int:
             except RuntimeError as exc:
                 print(f"  fetch failed {r['source_id']}: {exc}")
             time.sleep(0.25)
-        inferred = infer_state(pop, r["title"], r["raw_text"]) if pop is not None else state_from_text(
-            f"{r['title']}\n{r['raw_text'] or ''}"
-        )
+        inferred = infer_state(pop, r["title"], r["raw_text"], agency=r["agency"])
         if not inferred:
             tally["unresolved"] += 1
             continue

@@ -8,7 +8,11 @@ This module recovers a state, in decreasing order of confidence:
     1. ZIP code in placeOfPerformance -> state (deterministic 3-digit prefix table)
     2. "City, ST 12345" style address in the title/description (ST + 5-digit ZIP
        is unambiguous)
-    3. Exactly one distinct state spelled out in full in the text ("in Kentucky",
+    3. Interior/FWS "ST-Site" title tag ("WY-JACKSON NFH-..."), gated on those
+       agencies and a blocklist of codes that double as English prefixes.
+    4. Exactly one distinct state spelled out in full in the TITLE alone (the
+       description often adds the contracting office's state and would spoil it).
+    5. Exactly one distinct state spelled out in full in the text ("in Kentucky",
        "Fort Bragg, North Carolina") — skipped when two or more different states
        are named, and "Washington" alone is never treated as WA/DC.
 
@@ -71,7 +75,7 @@ _ADDR_RE = re.compile(r"\b([A-Z][A-Za-z.' -]{1,40}?),?\s+([A-Z]{2})\s+(\d{5})(?:
 # state ("Mississippi River Pool 3" is in Minnesota; "Kansas City" may be MO).
 _NAME_RE = re.compile(
     r"\b(" + "|".join(sorted((re.escape(n) for n in STATE_NAMES), key=len, reverse=True)) + r")\b"
-    r"(?!\s+(?:river|lake|city|valley|ave\b|avenue|st\b|street|road|rd\b|blvd|boulevard|hwy|highway|creek|bay|beach\b)\b)",
+    r"(?!\s+(?:river|lake|city|valley|region|basin|delta|ave\b|avenue|st\b|street|road|rd\b|blvd|boulevard|hwy|highway|creek|bay|beach\b)\b)",
     re.IGNORECASE,
 )
 
@@ -95,30 +99,69 @@ def state_from_zip(zip_code: str | None) -> str | None:
     return None
 
 
-def state_from_text(text: str | None) -> Inferred | None:
-    if not text:
-        return None
-    # 1) "City, ST 12345" — require the two-letter code to agree with the ZIP.
+def _address(text: str) -> Inferred | None:
+    # "City, ST 12345" — require the two-letter code to agree with the ZIP.
     for m in _ADDR_RE.finditer(text):
         st, z = m.group(2), m.group(3)
         if st in STATE_CODES and state_from_zip(z) == st:
             return Inferred(st, "address")
-    # 2) Full state names: accept only if exactly one distinct state is named.
-    #    Ignore boilerplate about where the buying office lives ("DLA Disposition
-    #    Services Headquarters is in Battle Creek, Michigan") — that's not the
-    #    place of performance.
+    return None
+
+
+def _single_name(text: str, method: str = "name") -> Inferred | None:
+    # Full state names: accept only if exactly one distinct state is named.
+    # Ignore boilerplate about where the buying office lives ("DLA Disposition
+    # Services Headquarters is in Battle Creek, Michigan") — that's not the
+    # place of performance.
     found = {
         STATE_NAMES[m.group(1).lower()]
         for m in _NAME_RE.finditer(text)
         if "headquarter" not in text[max(0, m.start() - 80) : m.start()].lower()
     }
     if len(found) == 1:
-        return Inferred(found.pop(), "name")
+        return Inferred(found.pop(), method)
     return None
 
 
-def infer_state(pop: dict | None, *texts: str | None) -> Inferred | None:
-    """Best-effort state for a notice. `pop` is SAM's placeOfPerformance dict."""
+def state_from_text(text: str | None) -> Inferred | None:
+    if not text:
+        return None
+    return _address(text) or _single_name(text)
+
+
+# Interior/FWS titles routinely lead with a state tag: "WY-JACKSON NFH-...",
+# "S--WY-ALCOVA North Platte Area Office...", "S--R4-PR-Cabo Rojo NWR-...".
+# Optional PSC letter prefix ("S--"), optional FWS region ("R4-"), then the
+# two-letter code, hyphen, and an uppercase site name.
+_TITLE_PREFIX_RE = re.compile(r"^\s*(?:[A-Z]--)?(?:R\d{1,2}-)?([A-Z]{2})-(?=[A-Z])")
+# Codes whose "XX-" reading is more plausibly an English prefix than a state
+# tag (IN-HOUSE, CO-OP, DE-ICING, LA-JOLLA, MS-DOS, AL-..., HI-TECH, ID-...).
+# A wrong state is worse than none, so these never match by prefix.
+_PREFIX_UNSAFE = {"IN", "CO", "DE", "LA", "MS", "AL", "HI", "ID"}
+_PREFIX_AGENCIES = ("INTERIOR", "FISH AND WILDLIFE", "FWS")
+
+
+def state_from_title_prefix(title: str | None, agency: str | None) -> Inferred | None:
+    """The Interior/FWS "ST-Site" title convention, gated on those agencies."""
+    if not title or not agency:
+        return None
+    a = agency.upper()
+    if not any(tok in a for tok in _PREFIX_AGENCIES):
+        return None
+    m = _TITLE_PREFIX_RE.match(title)
+    if m and m.group(1) in STATE_CODES and m.group(1) not in _PREFIX_UNSAFE:
+        return Inferred(m.group(1), "title-prefix")
+    return None
+
+
+def infer_state(pop: dict | None, *texts: str | None, agency: str | None = None) -> Inferred | None:
+    """Best-effort state for a notice. `pop` is SAM's placeOfPerformance dict.
+
+    `texts` should be (title, description); the title, when it names exactly one
+    state, wins over the joined text, because descriptions often name the
+    contracting office's state too ("ACC-NJ at Fort Dix, on behalf of ... in
+    Western Pennsylvania" — the title says only Pennsylvania).
+    """
     pop = pop or {}
     country = (pop.get("country") or {}).get("code") if isinstance(pop.get("country"), dict) else None
     if country and country.upper() not in ("US", "USA"):
@@ -134,4 +177,11 @@ def infer_state(pop: dict | None, *texts: str | None) -> Inferred | None:
     st = state_from_zip(pop.get("zip"))
     if st:
         return Inferred(st, "zip")
-    return state_from_text("\n".join(t for t in texts if t))
+    title = texts[0] if texts else None
+    joined = "\n".join(t for t in texts if t)
+    return (
+        (_address(joined) if joined else None)          # ST+ZIP agreement, deterministic
+        or state_from_title_prefix(title, agency)       # Interior/FWS "ST-Site" tag
+        or (_single_name(title, "title-name") if title else None)  # one state in the title
+        or (_single_name(joined) if joined else None)   # one state anywhere
+    )

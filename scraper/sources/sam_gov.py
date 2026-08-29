@@ -171,7 +171,7 @@ def to_bid(result: dict, det: dict) -> Bid:
     raw_text = _strip_html("\n".join(desc_parts))
     # placeOfPerformance is empty on roughly a third of notices; fall back to the
     # ZIP, then to an address or a single state name in the text (see geo.py).
-    inferred = infer_state(pop, title, raw_text)
+    inferred = infer_state(pop, title, raw_text, agency=_org_name(result))
     state = inferred.state if inferred else None
     return Bid(
         source="sam.gov",
