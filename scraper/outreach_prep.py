@@ -221,27 +221,27 @@ def build_email(p: dict, ctx: dict) -> dict:
     if st and ctx["state_count"] >= STATE_HOOK_MIN:
         n = ctx["state_count"]
         if n == 1:
-            subject = f"An open federal {trade_label} bid in {st} — thought of {company}"
+            subject = f"An open federal {trade_label} bid in {st}, thought of {company}"
             volume = (
                 f"There's one open {trade_label} solicitation in {st} right now, "
                 f"plus {ctx['national_count']} nationwide."
             )
         else:
-            subject = f"{n} open federal {trade_label} bids in {st} — thought of {company}"
+            subject = f"{n} open federal {trade_label} bids in {st}, thought of {company}"
             volume = (
                 f"Right now there are {n} open {trade_label} solicitations in {st}, "
                 f"and {ctx['national_count']} nationwide."
             )
     elif ctx.get("region_name") and ctx["region_count"] >= REGION_HOOK_MIN:
-        subject = (f"{ctx['region_count']} open federal {trade_label} bids near {st} — "
+        subject = (f"{ctx['region_count']} open federal {trade_label} bids near {st}, "
                    f"thought of {company}")
         volume = (
             f"{st} is quiet this week, but there are {ctx['region_count']} open {trade_label} "
             f"solicitations across the {ctx['region_name']} states and "
-            f"{ctx['national_count']} nationwide — and federal work travels."
+            f"{ctx['national_count']} nationwide, and federal work travels."
         )
     else:
-        subject = f"{ctx['national_count']} open federal {trade_label} bids — thought of {company}"
+        subject = f"{ctx['national_count']} open federal {trade_label} bids, thought of {company}"
         volume = (
             f"There are {ctx['national_count']} open federal {trade_label} solicitations "
             f"nationwide right now, and small shops win a real share of them."
@@ -256,7 +256,7 @@ def build_email(p: dict, ctx: dict) -> dict:
         p = {**p, "agency": agency}
         scope = p.get("scope") or f"{trade_label} work"
         congrats = (
-            f"Congrats on the {p['agency']} {scope} award — public award records show {company} "
+            f"Congrats on the {p['agency']} {scope} award. Public award records show {company} "
             f"is one of the smaller {trade_label} shops actually winning federal work."
         )
     else:
@@ -277,7 +277,9 @@ def build_email(p: dict, ctx: dict) -> dict:
     if ex:
         d = days_out(ex.get("due_at"))
         due_txt = (ex.get("due_at") or "")[:10]
-        when = f"due {due_txt}" + (f", {d} days out" if d is not None and d >= 0 else "")
+        when = f"due {due_txt}" + (
+            f", {d} day{'' if d == 1 else 's'} out" if d is not None and d >= 0 else ""
+        )
         ex_where = ", ".join(x for x in (ex.get("city"), ex.get("state")) if x)
         if ctx.get("example_scope") == "state" and ctx["state_count"] == 1:
             lead = "Here it is:"   # we just said there is exactly one - don't repeat
@@ -306,11 +308,11 @@ BidScout watches SAM.gov for small {trade_label} contractors. Every Monday we se
 {volume}
 {ex_line}
 
-{cta_line}Want the Monday digest? It's free — just reply "yes" or sign up at {SITE}. And since you're clearly bidding already: your first month of Triage is on us, no card, no strings.
+{cta_line}Want the Monday digest? It's free. Just reply "yes" or sign up at {SITE}. And since you're clearly bidding already: your first month of Triage is on us, no card, no strings.
 
 If federal bids aren't a fit, tell us and we won't email again.
 
-— BidScout
+- BidScout
 {SITE}
 
 {footer}

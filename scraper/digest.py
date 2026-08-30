@@ -77,7 +77,7 @@ def _blurb(text: str | None, n: int = 160) -> str:
 def build(db: Neon, trade: str, state: str, limit: int = 15) -> dict:
     rows = db.query(QUERY, [trade, state, limit])
     label = TRADE_LABEL.get(trade, trade)
-    lines = [f"BidScout weekly digest — {label}, {state}", ""]
+    lines = [f"BidScout weekly digest: {label}, {state}", ""]
     local = [r for r in rows if r["state"]]
     national = [r for r in rows if not r["state"]]
     if not rows:
@@ -99,12 +99,12 @@ def build(db: Neon, trade: str, state: str, limit: int = 15) -> dict:
         "",
         "Want a one-page pursue/skip call on each of these, with the requirements checklist pulled out of the PDF? Reply \"triage\" and we'll set you up ($99/mo, cancel any time).",
         "",
-        "— BidScout",
+        "- BidScout",
         f"You're getting this because you subscribed at {SITE} for {label} bids in {state}. "
         "Reply \"stop\" or \"unsubscribe\" and you're off the list immediately, no questions.",
         f"BidScout · {POSTAL_ADDRESS or '[POSTAL ADDRESS MISSING - DO NOT SEND]'}",
     ]
-    return {"trade": trade, "state": state, "count": len(rows), "subject": f"[BidScout] {len(rows)} open {label} bids — {state}, week of {datetime.now(timezone.utc):%b %d}", "body": "\n".join(lines)}
+    return {"trade": trade, "state": state, "count": len(rows), "subject": f"[BidScout] {len(rows)} open {label} bids in {state}, week of {datetime.now(timezone.utc):%b %d}", "body": "\n".join(lines)}
 
 
 def _entry(r: dict) -> list[str]:
