@@ -45,7 +45,7 @@ TRADE_LABEL = {
 
 QUERY = """
 SELECT title, agency, state, city, set_aside, notice_type, due_at::text, url, left(raw_text, 400) AS raw_text
-FROM bids
+FROM bids_current
 WHERE trade = $1
   AND due_at > now()
   AND (state = $2 OR state IS NULL)

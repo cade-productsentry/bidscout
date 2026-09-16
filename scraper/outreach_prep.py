@@ -98,14 +98,14 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
     st = ctx["state"]
 
     nat = db.query(
-        "SELECT count(*) AS n FROM bids WHERE trade = $1 AND due_at > now()", [trade]
+        "SELECT count(*) AS n FROM bids_current WHERE trade = $1 AND due_at > now()", [trade]
     )
     ctx["national_count"] = int(nat[0]["n"]) if nat else 0
 
     ctx["state_count"] = 0
     if st:
         r = db.query(
-            "SELECT count(*) AS n FROM bids WHERE trade = $1 AND state = $2 AND due_at > now()",
+            "SELECT count(*) AS n FROM bids_current WHERE trade = $1 AND state = $2 AND due_at > now()",
             [trade, st],
         )
         ctx["state_count"] = int(r[0]["n"]) if r else 0
@@ -116,7 +116,7 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
     if members:
         placeholders = ", ".join(f"${i + 2}" for i in range(len(members)))
         r = db.query(
-            f"SELECT count(*) AS n FROM bids WHERE trade = $1 AND due_at > now() "
+            f"SELECT count(*) AS n FROM bids_current WHERE trade = $1 AND due_at > now() "
             f"AND state IN ({placeholders})",
             [trade] + members,
         )
@@ -127,7 +127,7 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
     # tomorrow makes the product look useless — and skip stub titles.
     ACTIONABLE = (" AND due_at > now() + interval '10 days'"
                   " AND length(title) > 25")
-    cols = ("SELECT title, agency, city, state, due_at::text, url, set_aside FROM bids "
+    cols = ("SELECT title, agency, city, state, due_at::text, url, set_aside FROM bids_current "
             "WHERE trade = $1 AND due_at > now()")
     rows = []
     ctx["example_scope"] = "national"

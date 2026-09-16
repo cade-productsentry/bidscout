@@ -116,7 +116,7 @@ def main() -> int:
     if db is not None:
         _finish_run(db, run_id, status, inserted, len(known), errors)
         stats = db.query(
-            "SELECT trade, count(*) AS n FROM bids WHERE due_at > now() GROUP BY trade ORDER BY n DESC"
+            "SELECT trade, count(*) AS n FROM bids_current WHERE due_at > now() GROUP BY trade ORDER BY n DESC"
         )
         print("open bids by trade:", ", ".join(f"{r['trade'] or '?'}={r['n']}" for r in stats))
     return 0 if status != "failed" else 1

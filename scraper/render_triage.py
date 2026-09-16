@@ -118,7 +118,7 @@ def main() -> int:
     db = Neon(os.environ["DATABASE_URL"])
 
     if args.list:
-        sql = f"SELECT id, title, agency, trade, state, due_at::text, set_aside FROM bids WHERE due_at > now()"
+        sql = f"SELECT id, title, agency, trade, state, due_at::text, set_aside FROM bids_current WHERE due_at > now()"
         params: list = []
         if args.trade:
             params.append(args.trade)

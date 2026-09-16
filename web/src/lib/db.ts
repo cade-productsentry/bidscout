@@ -61,7 +61,7 @@ export function openBids(): Promise<BidRow[]> {
   cache = sql`
     SELECT id, title, agency, trade, naics, state, city, notice_type, set_aside,
            posted_at::text, due_at::text, url, left(raw_text, 600) AS raw_text
-    FROM bids
+    FROM bids_current
     WHERE trade IS NOT NULL
       AND (due_at > now() OR (due_at IS NULL AND updated_at > now() - interval '30 days'))
     ORDER BY due_at NULLS LAST, posted_at DESC

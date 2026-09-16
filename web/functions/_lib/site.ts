@@ -68,13 +68,13 @@ export async function openBids(env: Env, state?: string, trade?: string): Promis
   const sql = neon(env.DATABASE_URL);
   let rows: Record<string, unknown>[];
   if (state && trade) {
-    rows = await sql.query(`SELECT ${COLS} FROM bids WHERE ${OPEN_WHERE} AND state = $1 AND trade = $2 ORDER BY due_at NULLS LAST, posted_at DESC`, [state, trade]);
+    rows = await sql.query(`SELECT ${COLS} FROM bids_current WHERE ${OPEN_WHERE} AND state = $1 AND trade = $2 ORDER BY due_at NULLS LAST, posted_at DESC`, [state, trade]);
   } else if (state) {
-    rows = await sql.query(`SELECT ${COLS} FROM bids WHERE ${OPEN_WHERE} AND state = $1 ORDER BY due_at NULLS LAST, posted_at DESC`, [state]);
+    rows = await sql.query(`SELECT ${COLS} FROM bids_current WHERE ${OPEN_WHERE} AND state = $1 ORDER BY due_at NULLS LAST, posted_at DESC`, [state]);
   } else if (trade) {
-    rows = await sql.query(`SELECT ${COLS} FROM bids WHERE ${OPEN_WHERE} AND trade = $1 ORDER BY due_at NULLS LAST, posted_at DESC`, [trade]);
+    rows = await sql.query(`SELECT ${COLS} FROM bids_current WHERE ${OPEN_WHERE} AND trade = $1 ORDER BY due_at NULLS LAST, posted_at DESC`, [trade]);
   } else {
-    rows = await sql.query(`SELECT ${COLS} FROM bids WHERE ${OPEN_WHERE} ORDER BY due_at NULLS LAST, posted_at DESC`);
+    rows = await sql.query(`SELECT ${COLS} FROM bids_current WHERE ${OPEN_WHERE} ORDER BY due_at NULLS LAST, posted_at DESC`);
   }
   return rows as unknown as BidRow[];
 }
@@ -82,7 +82,7 @@ export async function openBids(env: Env, state?: string, trade?: string): Promis
 /** Counts per (state, trade) for index pages and the sitemap: one cheap query. */
 export async function openCounts(env: Env): Promise<{ state: string | null; trade: string; n: number }[]> {
   const sql = neon(env.DATABASE_URL);
-  const rows = await sql.query(`SELECT state, trade, count(*)::int AS n FROM bids WHERE ${OPEN_WHERE} GROUP BY state, trade`);
+  const rows = await sql.query(`SELECT state, trade, count(*)::int AS n FROM bids_current WHERE ${OPEN_WHERE} GROUP BY state, trade`);
   return rows as unknown as { state: string | null; trade: string; n: number }[];
 }
 
