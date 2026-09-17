@@ -218,6 +218,10 @@ def build_email(p: dict, ctx: dict) -> dict:
     company = p["company"]
     greeting = f"Hi {p['first_name']}," if p.get("first_name") else "Hi there,"
 
+    # The CTA link must match the hook we just used. Linking the state page
+    # behind a "near {st}" or nationwide hook sends the reader to a page that
+    # shows zero bids, which reads as a lie even though every number is true.
+    link = SITE
     if st and ctx["state_count"] >= STATE_HOOK_MIN:
         n = ctx["state_count"]
         if n == 1:
@@ -232,6 +236,7 @@ def build_email(p: dict, ctx: dict) -> dict:
                 f"Right now there are {n} open {trade_label} solicitations in {st}, "
                 f"and {ctx['national_count']} nationwide."
             )
+        link = f"{SITE}/bids/{st.lower()}/{p['trade']}/"
     elif ctx.get("region_name") and ctx["region_count"] >= REGION_HOOK_MIN:
         subject = (f"{ctx['region_count']} open federal {trade_label} bids near {st}, "
                    f"thought of {company}")
@@ -240,13 +245,16 @@ def build_email(p: dict, ctx: dict) -> dict:
             f"solicitations across the {ctx['region_name']} states and "
             f"{ctx['national_count']} nationwide, and federal work travels."
         )
+        # No per-region page exists, and the state page is empty by definition
+        # here, so send them to the trade page where the nearby ones are listed.
+        link = f"{SITE}/bids/trade/{p['trade']}/"
     else:
         subject = f"{ctx['national_count']} open federal {trade_label} bids, thought of {company}"
         volume = (
             f"There are {ctx['national_count']} open federal {trade_label} solicitations "
             f"nationwide right now, and small shops win a real share of them."
         )
-    link = f"{SITE}/bids/{st.lower()}/{p['trade']}/" if st else SITE
+        link = f"{SITE}/bids/trade/{p['trade']}/"
 
     # Congratulations line — only if we actually know the award context.
     if p.get("agency"):

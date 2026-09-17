@@ -53,6 +53,18 @@ ORDER BY (state IS NULL), due_at
 LIMIT $3
 """
 
+# True totals, unaffected by the display LIMIT above. The subject line and the
+# section headers quote these, so a digest never claims a number the reader
+# cannot see and never caps a real count at the display limit.
+COUNTS = """
+SELECT count(*) FILTER (WHERE state = $2) AS in_state,
+       count(*) FILTER (WHERE state IS NULL) AS unspecified
+FROM bids_current
+WHERE trade = $1
+  AND due_at > now()
+  AND (state = $2 OR state IS NULL)
+"""
+
 
 def _fmt_due(iso: str | None) -> str:
     if not iso:
@@ -76,6 +88,9 @@ def _blurb(text: str | None, n: int = 160) -> str:
 
 def build(db: Neon, trade: str, state: str, limit: int = 15) -> dict:
     rows = db.query(QUERY, [trade, state, limit])
+    totals = db.query(COUNTS, [trade, state])
+    n_local = int(totals[0]["in_state"]) if totals else 0
+    n_national = int(totals[0]["unspecified"]) if totals else 0
     label = TRADE_LABEL.get(trade, trade)
     lines = [f"BidScout weekly digest: {label}, {state}", ""]
     local = [r for r in rows if r["state"]]
@@ -85,12 +100,14 @@ def build(db: Neon, trade: str, state: str, limit: int = 15) -> dict:
         lines.append(f"Browse other states: {SITE}/bids/")
     else:
         if local:
-            lines.append(f"In {state} ({len(local)}):")
+            lines.append(f"In {state} ({_shown(len(local), n_local)}):")
             for r in local:
                 lines += _entry(r)
         if national:
             lines.append("")
-            lines.append(f"Location not specified / nationwide ({len(national)}):")
+            lines.append(
+                f"Location not specified / nationwide ({_shown(len(national), n_national)}):"
+            )
             for r in national:
                 lines += _entry(r)
     lines += [
@@ -104,7 +121,44 @@ def build(db: Neon, trade: str, state: str, limit: int = 15) -> dict:
         "Reply \"stop\" or \"unsubscribe\" and you're off the list immediately, no questions.",
         f"BidScout · {POSTAL_ADDRESS or '[POSTAL ADDRESS MISSING - DO NOT SEND]'}",
     ]
-    return {"trade": trade, "state": state, "count": len(rows), "subject": f"[BidScout] {len(rows)} open {label} bids in {state}, week of {datetime.now(timezone.utc):%b %d}", "body": "\n".join(lines)}
+    return {
+        "trade": trade,
+        "state": state,
+        "count": n_local + n_national,
+        "in_state": n_local,
+        "unspecified": n_national,
+        "shown": len(rows),
+        "subject": _subject(label, state, n_local, n_national),
+        "body": "\n".join(lines),
+    }
+
+
+def _shown(shown: int, total: int) -> str:
+    """'3' when the list is complete, 'showing 15 of 42' when the LIMIT bit."""
+    return str(total) if shown >= total else f"showing {shown} of {total}"
+
+
+def _subject(label: str, state: str, n_local: int, n_national: int) -> str:
+    """Subject counts what the reader will actually see under 'In {state}'.
+
+    The old version summed in-state and unspecified-location rows, so a digest
+    headed 'In TX (3)' could go out with the subject '4 open Roofing bids in TX'.
+    Unspecified-location notices are real and worth listing, but they are not
+    bids in the subscriber's state and must not be counted as if they were.
+    """
+    week = f"week of {datetime.now(timezone.utc):%b %d}"
+    if n_local:
+        head = f"{n_local} open {label} bid{'' if n_local == 1 else 's'} in {state}"
+        if n_national:
+            head += f" (+{n_national} nationwide)"
+    elif n_national:
+        head = (
+            f"No open {label} bids in {state}, "
+            f"{n_national} nationwide you can still bid"
+        )
+    else:
+        head = f"No open {label} bids in {state}"
+    return f"[BidScout] {head}, {week}"
 
 
 def _entry(r: dict) -> list[str]:
