@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import os
 import sys
 from datetime import datetime, timezone
@@ -64,6 +65,19 @@ WHERE trade = $1
   AND due_at > now()
   AND (state = $2 OR state IS NULL)
 """
+
+
+def clean_title(raw: str | None) -> str:
+    """Display form of a SAM.gov notice title.
+
+    Strips the leading PSC classification code ("Z2DA--", "N--") that SAM.gov
+    prepends on some notices: it is filing metadata, not part of the job name,
+    and it makes a quoted title look like a typo to a contractor reading a cold
+    email. Also collapses the runs of whitespace that show up in shouted titles.
+    Display only; bids_current normalizes the same prefix for deduping.
+    """
+    t = re.sub(r"^[A-Z0-9]{1,6}--", "", (raw or "").strip())
+    return " ".join(t.split())
 
 
 def _fmt_due(iso: str | None) -> str:
@@ -164,7 +178,7 @@ def _subject(label: str, state: str, n_local: int, n_national: int) -> str:
 def _entry(r: dict) -> list[str]:
     where = ", ".join(x for x in [r.get("city"), r.get("state")] if x)
     meta = " · ".join(x for x in [f"Due {_fmt_due(r['due_at'])}", r.get("agency"), where, r.get("set_aside")] if x)
-    out = [f"• {r['title']}", f"  {meta}"]
+    out = [f"• {clean_title(r['title'])}", f"  {meta}"]
     b = _blurb(r.get("raw_text"))
     if b:
         out.append(f"  {b}")

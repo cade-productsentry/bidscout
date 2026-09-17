@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import os
 import sys
 from datetime import datetime, timezone
@@ -159,6 +160,19 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
                 break
     ctx["example"] = rows[0] if rows else None
     return ctx
+
+
+def clean_title(raw: str | None) -> str:
+    """Display form of a SAM.gov notice title.
+
+    Strips the leading PSC classification code ("Z2DA--", "N--") that SAM.gov
+    prepends on some notices: it is filing metadata, not part of the job name,
+    and it makes a quoted title look like a typo to a contractor reading a cold
+    email. Also collapses the runs of whitespace that show up in shouted titles.
+    Display only; bids_current normalizes the same prefix for deduping.
+    """
+    t = re.sub(r"^[A-Z0-9]{1,6}--", "", (raw or "").strip())
+    return " ".join(t.split())
 
 
 def clean_agency(raw: str | None) -> str:
@@ -296,7 +310,7 @@ def build_email(p: dict, ctx: dict) -> dict:
                 "state": "One in your state right now:",
                 "region": "One nearby right now:",
             }.get(ctx.get("example_scope"), "One that's open right now:")
-        title = ex["title"].strip()
+        title = clean_title(ex["title"])
         ex_line = (
             f'{lead} "{title}" '
             f'({clean_agency(ex.get("agency"))}{", " + ex_where if ex_where else ""}, {when}).'
