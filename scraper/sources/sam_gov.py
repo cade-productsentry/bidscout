@@ -71,6 +71,7 @@ class Bid:
     trade: str | None
     naics: str | None
     state: str | None
+    state_method: str | None
     county: str | None
     city: str | None
     notice_type: str | None
@@ -182,6 +183,7 @@ def to_bid(result: dict, det: dict) -> Bid:
         trade=trade,
         naics=naics,
         state=state,
+        state_method=inferred.method if inferred else None,
         county=None,
         city=(pop.get("city") or {}).get("name"),
         notice_type=NOTICE_TYPES.get(notice_code or "", notice_code),

@@ -128,6 +128,13 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
     # tomorrow makes the product look useless — and skip stub titles.
     ACTIONABLE = (" AND due_at > now() + interval '10 days'"
                   " AND length(title) > 25")
+    # The in-state example is the one sentence in the whole email that makes a
+    # specific geographic claim, so it should rest on a state SAM.gov stated
+    # rather than one we read out of prose. state_method is written by
+    # geo.infer_state (migration 002); 'name' and 'title-name' are the prose
+    # guesses. NULL means the row predates the column, so it stays eligible -
+    # every open notice is re-upserted at least daily and fills itself in.
+    CORROBORATED = " AND (state_method IS NULL OR state_method NOT IN ('name', 'title-name'))"
     cols = ("SELECT title, agency, city, state, due_at::text, url, set_aside FROM bids_current "
             "WHERE trade = $1 AND due_at > now()")
     rows = []
@@ -136,7 +143,7 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
     # bid, so showing an out-of-state one instead reads as a contradiction.
     # Only widen once the home state is genuinely exhausted.
     if ctx["state_count"]:
-        for extra in (ACTIONABLE, ""):
+        for extra in (ACTIONABLE + CORROBORATED, CORROBORATED, ACTIONABLE, ""):
             rows = db.query(cols + extra + " AND state = $2 ORDER BY due_at ASC LIMIT 1",
                             [trade, st])
             if rows:

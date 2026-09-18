@@ -22,15 +22,16 @@ from neon_http import Neon  # noqa: E402
 from sources import sam_gov  # noqa: E402
 
 UPSERT = """
-INSERT INTO bids (source, source_id, url, title, agency, trade, naics, state, county, city,
+INSERT INTO bids (source, source_id, url, title, agency, trade, naics, state, state_method, county, city,
                   notice_type, set_aside, posted_at, due_at, poc_email, raw_text, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16, now())
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17, now())
 ON CONFLICT (url) DO UPDATE SET
   title = EXCLUDED.title,
   agency = COALESCE(EXCLUDED.agency, bids.agency),
   trade = COALESCE(EXCLUDED.trade, bids.trade),
   naics = COALESCE(EXCLUDED.naics, bids.naics),
   state = COALESCE(EXCLUDED.state, bids.state),
+  state_method = COALESCE(EXCLUDED.state_method, bids.state_method),
   city = COALESCE(EXCLUDED.city, bids.city),
   notice_type = EXCLUDED.notice_type,
   set_aside = COALESCE(EXCLUDED.set_aside, bids.set_aside),
@@ -97,7 +98,7 @@ def main() -> int:
                 UPSERT,
                 [
                     d["source"], d["source_id"], d["url"], d["title"], d["agency"], d["trade"], d["naics"],
-                    d["state"], d["county"], d["city"], d["notice_type"], d["set_aside"], d["posted_at"],
+                    d["state"], d["state_method"], d["county"], d["city"], d["notice_type"], d["set_aside"], d["posted_at"],
                     d["due_at"], d["poc_email"], d["raw_text"],
                 ],
             )

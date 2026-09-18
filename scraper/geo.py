@@ -23,6 +23,7 @@ is worse than none because the outreach copy promises "near you".
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 
@@ -154,6 +155,47 @@ def state_from_title_prefix(title: str | None, agency: str | None) -> Inferred |
     return None
 
 
+# --- place-of-performance city corroboration -------------------------------
+# data/city_states.tsv: "CITY NAME<TAB>ST,ST,..." built from the 2023 Census
+# Gazetteer (places + county subdivisions + counties, consolidated city-county
+# names also indexed by their first token) plus the five NYC boroughs.
+#
+# IMPORTANT, learned the hard way 2026-09-18: this map CANNOT be used to refute
+# a state in general. Run against the whole bids table it flags 64 rows and
+# roughly 63 of them are correct: military installations named after a place in
+# another state (Fort Bragg NC, Edwards CA, McClellan CA, Santa Rita GU) and
+# unincorporated places the Gazetteer does not carry (Hines IL, Leeds MA,
+# Chatsworth NJ). It is only sound in the prose-fallback branch of
+# infer_state(), where SAM gave us a city, gave us no structured state, and the
+# alternative is a state scraped out of free text.
+_CITY_STATES: dict[str, frozenset[str]] | None = None
+
+
+def _city_states() -> dict[str, frozenset[str]]:
+    global _CITY_STATES
+    if _CITY_STATES is None:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "city_states.tsv")
+        m: dict[str, frozenset[str]] = {}
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    name, _, codes = line.rstrip("\n").partition("\t")
+                    if name and codes:
+                        m[name] = frozenset(codes.split(","))
+        except OSError:
+            m = {}
+        _CITY_STATES = m
+    return _CITY_STATES
+
+
+def states_for_city(city: str | None) -> frozenset[str] | None:
+    """States that have a place by this name, or None if the name is unknown."""
+    if not city:
+        return None
+    key = re.sub(r"\s+", " ", city.strip()).upper()
+    return _city_states().get(key)
+
+
 def infer_state(pop: dict | None, *texts: str | None, agency: str | None = None) -> Inferred | None:
     """Best-effort state for a notice. `pop` is SAM's placeOfPerformance dict.
 
@@ -179,9 +221,26 @@ def infer_state(pop: dict | None, *texts: str | None, agency: str | None = None)
         return Inferred(st, "zip")
     title = texts[0] if texts else None
     joined = "\n".join(t for t in texts if t)
-    return (
+    guess = (
         (_address(joined) if joined else None)          # ST+ZIP agreement, deterministic
         or state_from_title_prefix(title, agency)       # Interior/FWS "ST-Site" tag
         or (_single_name(title, "title-name") if title else None)  # one state in the title
         or (_single_name(joined) if joined else None)   # one state anywhere
     )
+    # SAM told us the city but not the state. A state pulled out of prose is
+    # unanchored, and prose in a multi-state office's notice routinely names the
+    # wrong one: VA Network Contract Office 16 posted "TRIENNIAL ELECTRICAL
+    # MAINTENANCE FY26" with city New Orleans and no state code, and the text
+    # fallback read it as TX. It was one edit away from being featured to a
+    # Texas roofer as "one in your state right now". So when a city is present,
+    # the city arbitrates.
+    city = (pop.get("city") or {}).get("name") if isinstance(pop.get("city"), dict) else pop.get("city")
+    known = states_for_city(city if isinstance(city, str) else None)
+    if known is not None:
+        if len(known) == 1:
+            # Unambiguous place name. Trust it over the prose either way.
+            return Inferred(next(iter(known)), "city")
+        if guess and guess.state in known:
+            return Inferred(guess.state, guess.method + "+city")
+        return None  # prose contradicts the city; a wrong state is worse than none
+    return guess
