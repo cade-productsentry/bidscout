@@ -18,3 +18,11 @@ venv/
 # Prospect/outreach data is PII and this repo is public — never commit it.
 prospects*.json
 outreach_batch*.json
+
+# Sourcing/ranking intermediates. Public award data, but these files get
+# merged with hunted contact details in practice - keep them out of the repo.
+ranked*.json
+candidates*.json
+cand_raw*.txt
+wave*_batch.json
+wave*_pool.json
