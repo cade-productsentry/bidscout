@@ -79,6 +79,37 @@ BAD_WORDS = (
     "management services",
 )
 
+# Alaska Native Corporation subsidiaries and comparable tribal/native holding
+# groups. They pass USAspending's small_business filter because each operating
+# subsidiary is certified separately, but they are not the ICP: the parent runs
+# in-house business development and federal capture staff, which is precisely
+# the job BidScout sells to small shops that have nobody doing it.
+#
+# This was a per-wave hand judgment three times before it was worth encoding:
+# Olgoonik Specialty Contractors and Olgoonik General (both skipped 2026-09-20,
+# both name-matched), then CCI Facility Contractors (wave-6, 2026-09-21).
+#
+# KNOWN LIMIT, do not mistake this for full coverage: it matches on the NAME, so
+# it would NOT have caught CCI, whose name carries no parent token at all. CCI's
+# ANC ownership only surfaced at hunting time, when the single published contact
+# turned out to be a business-development mailbox at the parent's domain
+# (chunt@bbch-llc.com, Bristol Bay Construction Holdings). That is the general
+# tell worth carrying by hand: when a company publishes no address of its own
+# and the only address found belongs to a larger parent, check who the parent is
+# before the company enters a send batch.
+ANC_PARENTS = (
+    "olgoonik", "bristol bay", "bbch", "chugach", "afognak", "alutiiq",
+    "nana", "ahtna", "doyon", "calista", "koniag", "sealaska", "goldbelt",
+    "chenega", "arctic slope", "asrc", "tyonek", "akima", "ukpeagvik",
+    "cook inlet", "huna totem", "tanaq",
+)
+
+# Whole-word matching, not substring: "nana" as a substring also fires on
+# "Banana" and "asrc" on anything that happens to contain those four letters.
+ANC_RE = re.compile(
+    r"\b(" + "|".join(p.replace(" ", r"\s+") for p in ANC_PARENTS) + r")\b", re.I
+)
+
 DOMAIN_RE = re.compile(r"\.(com|net|org)\b", re.I)
 
 # A company with none of its trade's vocabulary in its name is usually either a
@@ -129,6 +160,8 @@ def icp_reason(company: str, trade: str) -> str | None:
     for w in BAD_WORDS:
         if w in low:
             return "non-ICP word"
+    if ANC_RE.search(company):
+        return "native corporation subsidiary"
     if DOMAIN_RE.search(low):
         return "bare domain name"
     if not any(w in low for w in TRADE_WORDS.get(trade, ())):
