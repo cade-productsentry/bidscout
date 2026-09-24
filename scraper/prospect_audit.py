@@ -38,6 +38,26 @@ examples from the first run, all decided by hand:
 The API's recipient_search_text is fuzzy, so a company whose awards do not
 name-match prints NO-AWARDS-MATCHED. That is an audit miss, not a finding about
 the prospect: verify those by hand rather than treating them as clean.
+
+UEI RESOLUTION (added 2026-09-24). recipient_search_text is fuzzy in the other
+direction too: it silently merges same-named but unrelated companies, and a
+merged award set looks exactly like a clean one. So before searching by name,
+this script asks /api/v2/recipient/ which UEIs actually carry that name.
+
+  - exactly one UEI matches -> search by UEI. The result is the company itself,
+    with no name bleed, and the line is marked "uei".
+  - several UEIs match -> print AMBIGUOUS-NAME with each UEI and its dollar
+    total, audit the largest, and mark the line so nobody reads it as settled.
+  - none match -> fall back to the old name search, marked "name".
+
+Worked example, the case that prompted this (Sentinel Power Services, 164):
+the name search returned 100 awards that no one could attribute. By UEI the
+two firms separate cleanly - VZH2RXQG6QD5 (LLC, $2.9M) against UBMJNJQ7S465
+(Inc, $23.5k) - and the 100 awards turned out to be genuinely the LLC's:
+100/100 electrical, but spread over 30 states and territories with only 6 pct
+in its home AZ. Trade right, state hook false, and the real finding was that a
+nationwide FAA electrical prime is not the small-shop ICP at all. Filed
+OUT-OF-ICP. Resolving the identity turned an unanswerable flag into a decision.
 """
 
 from __future__ import annotations
@@ -55,6 +75,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from neon_http import Neon  # noqa: E402
 
 API = "https://api.usaspending.gov/api/v2/search/spending_by_award/"
+RECIPIENT_API = "https://api.usaspending.gov/api/v2/recipient/"
 START = "2021-01-01"
 
 # Same mapping prospect_source.py sources against, inverted.
@@ -77,10 +98,70 @@ def norm(s: str) -> str:
     return " ".join(s.split())
 
 
-def fetch_awards(name: str, today: str, retries: int = 3):
+def _post(url: str, body: dict, retries: int = 3):
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
+    )
+    for attempt in range(retries):
+        try:
+            return json.load(urllib.request.urlopen(req, timeout=90))
+        except Exception:
+            if attempt == retries - 1:
+                return None
+            time.sleep(4)
+    return None
+
+
+def resolve_ueis(name: str):
+    """Which UEIs actually carry this company name, largest first.
+
+    recipient_search_text merges same-named unrelated firms without saying so.
+    This is the only cheap way to find out that it happened. Returns a list of
+    (uei, registered_name, dollars); an empty list means the lookup found
+    nothing usable and the caller should fall back to the name search.
+    """
+    target = norm(name)
+    # The keyword search is close to literal: "Sentinel Power Services LLC" returns
+    # one UEI-less stub while "sentinel power services" returns both real firms. So
+    # search on the normalized name, then on a shorter fragment if that finds nobody.
+    queries = [target]
+    words = target.split()
+    if len(words) > 2:
+        queries.append(" ".join(words[:2]))
+
+    seen: dict[str, tuple[str, float]] = {}
+    for q in queries:
+        data = _post(RECIPIENT_API, {"keyword": q, "order": "desc", "sort": "amount",
+                                     "limit": 25, "page": 1, "award_type": "all"})
+        for r in (data or {}).get("results", []):
+            uei = r.get("uei")
+            if not uei or norm(r.get("name")) != target:
+                continue
+            amount = float(r.get("amount") or 0)
+            # the same UEI comes back once per recipient_level (P/C/R); keep the best
+            if uei not in seen or amount > seen[uei][1]:
+                seen[uei] = (r.get("name"), amount)
+        if seen:
+            break
+
+    candidates = sorted(((u, n, a) for u, (n, a) in seen.items()), key=lambda x: -x[2])
+    # Most multi-UEI names are ONE company registered twice, not two companies.
+    # Two tells, both measured on the wave-8 set: a duplicate registration usually
+    # carries $0, and when it does not, the two rows carry the IDENTICAL total
+    # (Briston and Raad each showed the same dollar figure under two UEIs). Real
+    # ambiguity looks like Sentinel Power Services: $2.9M against $23.5k. So drop
+    # the empty registrations, and collapse exact-tie totals onto one entity.
+    funded = [c for c in candidates if c[2] > 0]
+    if len(funded) > 1 and len({c[2] for c in funded}) == 1:
+        funded = funded[:1]
+    return funded or candidates[:1]
+
+
+def fetch_awards(name: str, today: str, retries: int = 3, uei: str | None = None):
+    """Awards for a company. With a uei, the match is exact and nothing is filtered."""
     body = {
         "filters": {
-            "recipient_search_text": [name],
+            "recipient_search_text": [uei or name],
             "award_type_codes": ["A", "B", "C", "D"],
             "time_period": [{"start_date": START, "end_date": today}],
         },
@@ -93,26 +174,40 @@ def fetch_awards(name: str, today: str, retries: int = 3):
         "limit": 100,
         "page": 1,
     }
-    req = urllib.request.Request(
-        API, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}
-    )
-    for attempt in range(retries):
-        try:
-            data = json.load(urllib.request.urlopen(req, timeout=90))
-            break
-        except Exception:
-            if attempt == retries - 1:
-                return None
-            time.sleep(4)
+    data = _post(API, body, retries)
+    if data is None:
+        return None
+    results = data.get("results", [])
+    if uei:
+        return results
     target = norm(name)[:18]
-    return [a for a in data.get("results", []) if norm(a.get("Recipient Name")).startswith(target)]
+    return [a for a in results if norm(a.get("Recipient Name")).startswith(target)]
 
 
-def audit(rows, threshold: float, today: str, verbose: bool) -> int:
+def audit(rows, threshold: float, today: str, verbose: bool, by_name: bool = False) -> int:
     flagged = 0
     for p in rows:
         company, trade, state = p["company"], p.get("trade"), p.get("state")
-        awards = fetch_awards(company, today)
+
+        uei, how, ambiguous = p.get("uei"), "uei", False
+        if uei:
+            pass
+        elif by_name:
+            how = "name"
+        else:
+            candidates = resolve_ueis(company)
+            if len(candidates) == 1:
+                uei = candidates[0][0]
+            elif len(candidates) > 1:
+                uei, ambiguous = candidates[0][0], True
+                print(f"{p['id']:>5} {company[:36]:36s} AMBIGUOUS-NAME, {len(candidates)} UEIs carry it:")
+                for u, n, a in candidates:
+                    print(f"          {u}  ${a:,.0f}  {n}")
+                print(f"          auditing the largest ({uei}); confirm it is the prospect before acting")
+            else:
+                how = "name"
+
+        awards = fetch_awards(company, today, uei=uei)
         if awards is None:
             print(f"{p['id']:>5} {company[:36]:36s} API-ERROR")
             continue
@@ -129,6 +224,8 @@ def audit(rows, threshold: float, today: str, verbose: bool) -> int:
             flags += " TRADE?"
         if state_share < threshold:
             flags += " STATE?"
+        if ambiguous:
+            flags += " AMBIGUOUS"
         if flags:
             flagged += 1
         top_code, top_n = naics.most_common(1)[0]
@@ -136,7 +233,7 @@ def audit(rows, threshold: float, today: str, verbose: bool) -> int:
         print(
             f"{p['id']:>5} {company[:36]:36s} n={n:>3} {str(trade)[:15]:15s} "
             f"trade={trade_share:4.0%}  {state} pop={state_share:4.0%}  "
-            f"top={top_code} ({top_trade}){flags}"
+            f"top={top_code} ({top_trade}) [{how}]{flags}"
         )
         if verbose and flags:
             for (code), cnt in naics.most_common(5):
@@ -150,14 +247,27 @@ def main() -> int:
     ap.add_argument("--source", help="audit every emailable prospect with this prospects.source")
     ap.add_argument("--ids", help="comma-separated prospect ids")
     ap.add_argument("--company", help="audit one company by name, no DB lookup")
+    ap.add_argument("--uei", help="with --company, pin the audit to this exact UEI")
+    ap.add_argument("--resolve", help="just list the UEIs carrying this company name, then exit")
+    ap.add_argument("--by-name", action="store_true",
+                    help="skip UEI resolution and use the old fuzzy name search")
     ap.add_argument("--threshold", type=float, default=0.34)
     ap.add_argument("--verbose", action="store_true", help="print the NAICS and state mix for flagged rows")
     args = ap.parse_args()
 
     today = time.strftime("%Y-%m-%d")
 
+    if args.resolve:
+        candidates = resolve_ueis(args.resolve)
+        if not candidates:
+            print("no UEI carries that exact name; the name search is all there is")
+            return 1
+        for u, n, a in candidates:
+            print(f"{u}  ${a:,.0f}  {n}")
+        return 0
+
     if args.company:
-        rows = [{"id": 0, "company": args.company, "trade": None, "state": None}]
+        rows = [{"id": 0, "company": args.company, "trade": None, "state": None, "uei": args.uei}]
     else:
         db = Neon(os.environ["DATABASE_URL"])
         if args.ids:
@@ -177,7 +287,7 @@ def main() -> int:
             return 1
 
     print(f"auditing {len(rows)} prospect(s), threshold {args.threshold:.0%}\n")
-    flagged = audit(rows, args.threshold, today, args.verbose)
+    flagged = audit(rows, args.threshold, today, args.verbose, by_name=args.by_name)
     print(f"\n{flagged} flagged of {len(rows)}. Review by hand; this is not a filter.")
     return 0
 
