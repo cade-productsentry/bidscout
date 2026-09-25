@@ -140,6 +140,18 @@ def norm(name: str) -> str:
     single token "lp" and gets stripped. Splitting it into "l" and "p" was why
     "Composite Cooling Solutions, L.P." failed to match the "Composite Cooling
     Solutions LP" row that had just been written.
+
+    A trailing "s" is dropped from every token for the same reason, found
+    2026-09-25: "Duncan Mechanical Service Inc" (prospect 60, migrated) and
+    "Duncan Mechanical Services Inc" (prospect 158, wave-8) are one company in
+    San Angelo TX that was sourced and hunted twice. Both landed WEB-FORM so
+    nothing was mailed twice, but the second hunt was wasted work. Negative
+    checks, all still distinct after the change: "Front Range Construction" vs
+    "Front Range Electric", "Ranco Construction" vs "Ranger Construction",
+    "Son Excavating" vs "Sons Excavating" (the same firm, correctly merged).
+    The residual risk is a four-letter token whose plural is another company's
+    name ("Ark" and "Arks" collapse). The cost of a wrong merge is one candidate
+    skipped as already-known, not a wrong email, so it is the safe direction.
     """
     s = name.lower().replace(".", "")
     s = " ".join(re.sub(r"[^a-z0-9 ]", " ", s).split())
@@ -149,6 +161,7 @@ def norm(name: str) -> str:
     parts = s.split()
     while parts and parts[-1] in SUFFIXES:
         parts.pop()
+    parts = [p[:-1] if len(p) > 3 and p.endswith("s") else p for p in parts]
     return "".join(parts)
 
 
