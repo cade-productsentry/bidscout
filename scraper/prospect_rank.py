@@ -31,6 +31,9 @@ Ranking, in order:
      hit rate when it was introduced on 2026-09-17.
   4. Break ties on national depth in that trade, then on award size.
   5. Cap at 2 per (trade, state) so a wave is not all one state.
+  6. With --scale-top N, read the top N companies' federal award records and
+     flag the ones shaped like nationwide primes or equipment suppliers, so
+     that judgment happens before hunting time rather than after a send.
 
 Output is a JSON array ready to hand to the hunting step. No contact data is
 produced or stored here; this file is safe for the public repo.
@@ -237,6 +240,52 @@ def rank(cands: list[dict], db: Neon) -> tuple[list[dict], dict[str, int]]:
     return capped, dict(drops)
 
 
+def scale_check(rows: list[dict]) -> int:
+    """Annotate the shortlist with award-record size flags, before anyone hunts it.
+
+    Three companies have been dropped for being the wrong SIZE or the wrong side
+    of the transaction (Victory 110, Sentinel 164, PD Power 143), and all three
+    were caught by hand after time had already been spent on them. The award
+    record that settles it is one API call, so it is worth making that call while
+    the company is still a line in ranked.json rather than a prospect row.
+
+    Flags are written onto each record as "scale_flags" and printed. NOTHING IS
+    DROPPED: the thresholds separate the known drops from the known keeps by a
+    few points, not by orders of magnitude, so this is a review report in the
+    same sense as geo_audit.py and prospect_audit.py. Hunt the flagged companies
+    last, or read their award mix first, but do not let the script decide.
+
+    Failures are non-fatal by design. A wave must still be rankable when
+    USAspending is down, so a lookup that returns nothing leaves the record
+    unannotated and the hunt proceeds as it did before this step existed.
+    """
+    try:
+        from prospect_scale import describe, measure_unhunted, scale_flags, today_str
+    except Exception as exc:  # pragma: no cover - import guard, not logic
+        print(f"  scale check unavailable: {exc}", file=sys.stderr)
+        return 0
+
+    today, flagged = today_str(), 0
+    print(f"  scale check on top {len(rows)}:", file=sys.stderr)
+    for c in rows:
+        try:
+            m = measure_unhunted(c["company"], c.get("trade"), c.get("state"), today)
+        except Exception as exc:
+            print(f"    {c['company'][:38]:38s} lookup failed: {exc}", file=sys.stderr)
+            continue
+        if m is None:
+            print(f"    {c['company'][:38]:38s} no awards matched", file=sys.stderr)
+            continue
+        fl = scale_flags(m)
+        c["scale_flags"] = fl
+        if fl:
+            flagged += 1
+            print(f"    {c['company'][:38]:38s} {describe(m)}   {' '.join(fl)}",
+                  file=sys.stderr)
+    print(f"  {flagged} flagged for a human look before hunting", file=sys.stderr)
+    return flagged
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="infile", required=True,
@@ -244,6 +293,10 @@ def main() -> None:
     ap.add_argument("--out", dest="outfile", default="ranked.json")
     ap.add_argument("--top", type=int, default=0,
                     help="if set, keep only the top N after ranking")
+    ap.add_argument("--scale-top", type=int, default=0, metavar="N",
+                    help="read the award record of the top N and flag the ones "
+                         "that look like nationwide primes or equipment suppliers "
+                         "(reports only, drops nothing)")
     args = ap.parse_args()
 
     cands = load_candidates(args.infile)
@@ -251,6 +304,8 @@ def main() -> None:
     ranked, drops = rank(cands, db)
     if args.top:
         ranked = ranked[: args.top]
+    if args.scale_top:
+        scale_check(ranked[: args.scale_top])
 
     with open(args.outfile, "w") as fh:
         json.dump(ranked, fh, indent=1)
