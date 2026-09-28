@@ -43,6 +43,16 @@ from neon_http import Neon  # noqa: E402
 
 SITE = "https://bidscout.pages.dev"
 
+# DO NOT "FIX" THE LINKS IN SENT MAIL (verified 2026-09-28). Reading any BidScout
+# message back out of Gmail shows every URL rewritten to
+# https://www.google.com/url?q=<our url>&source=gmail&ust=...&sa=E
+# That is Gmail's own redirect wrapper, applied on send, not something this script
+# emits and not evidence of a hijacked link or a broken template. The real
+# destination is intact in the q= parameter and recipients land on the right page.
+# Confirmed identical on the 09-21 wave-6 first touches and the 09-28 sends, so it
+# has been happening to every message we have ever sent. There is nothing to
+# change here: the wrapper is added after our body leaves this code.
+
 # Required in every commercial email — see COMPLIANCE note above.
 POSTAL_ADDRESS = os.environ.get("BIDSCOUT_POSTAL_ADDRESS", "").strip()
 
