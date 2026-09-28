@@ -137,6 +137,28 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
     CORROBORATED = " AND (state_method IS NULL OR state_method NOT IN ('name', 'title-name'))"
     cols = ("SELECT title, agency, city, state, due_at::text, url, set_aside FROM bids_current "
             "WHERE trade = $1 AND due_at > now()")
+
+    def order_for(extra: str) -> str:
+        """Soonest-first ONLY while the 10-day floor is still in force.
+
+        With ACTIONABLE applied, every candidate is at least 10 days out, so
+        soonest-first picks the most urgent bid the prospect can still realistically
+        chase. Once we fall past ACTIONABLE the floor is gone, and ASC then selects
+        the exact thing the comment above says to avoid: the bid closing soonest,
+        sometimes today. Measured 2026-09-28, when the fiscal-year-end squeeze left
+        52 (trade, state) pairs with no actionable bid at all: DESC changed the
+        example in 13 of them, and the ones it changed were better in almost every
+        case. It replaced a general-building AK notice closing THAT DAY with one 9
+        days out, an electrical AZ "Notice of Intent to Award" (not biddable by
+        anyone) with a live solicitation, two "Sources Sought" placeholders with the
+        real services behind them, a site-work GA "RFI Notice:" with the actual
+        solicitation for the same job, and an hvac-plumbing WA Coast Guard parts buy
+        with a genuine HVAC system upgrade. One of the 13 (site-work NC) is a
+        toss-up and none of the rest got worse. Most time remaining is the best
+        available proxy for "still worth opening" once the floor is gone.
+        """
+        return " ORDER BY due_at ASC LIMIT 1" if ACTIONABLE in extra else " ORDER BY due_at DESC LIMIT 1"
+
     rows = []
     ctx["example_scope"] = "national"
     # Home state first and hardest: the volume sentence promises an in-state
@@ -144,7 +166,7 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
     # Only widen once the home state is genuinely exhausted.
     if ctx["state_count"]:
         for extra in (ACTIONABLE + CORROBORATED, CORROBORATED, ACTIONABLE, ""):
-            rows = db.query(cols + extra + " AND state = $2 ORDER BY due_at ASC LIMIT 1",
+            rows = db.query(cols + extra + " AND state = $2" + order_for(extra),
                             [trade, st])
             if rows:
                 ctx["example_scope"] = "state"
@@ -153,7 +175,7 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
         placeholders = ", ".join(f"${i + 2}" for i in range(len(members)))
         for extra in (ACTIONABLE, ""):
             rows = db.query(
-                cols + extra + f" AND state IN ({placeholders}) ORDER BY due_at ASC LIMIT 1",
+                cols + extra + f" AND state IN ({placeholders})" + order_for(extra),
                 [trade] + members,
             )
             if rows:
@@ -161,7 +183,7 @@ def fetch_context(db: Neon, trade: str, state: str | None) -> dict:
                 break
     if not rows:
         for extra in (ACTIONABLE, ""):
-            rows = db.query(cols + extra + " ORDER BY due_at ASC LIMIT 1", [trade])
+            rows = db.query(cols + extra + order_for(extra), [trade])
             if rows:
                 ctx["example_scope"] = "national"
                 break
