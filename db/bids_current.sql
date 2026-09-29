@@ -40,14 +40,50 @@
 -- state, i.e. no sign of genuinely distinct solicitations being collapsed.
 -- Re-run those two checks if this key ever looks suspect. The residual risk
 -- undercounts, which is the safe direction for claims we put in commercial email.
+-- AMENDMENT 2026-09-29: the key now also strips a TRAILING amendment suffix
+-- ("- Amendment 01", "| Amendment 002", "_Amendment 0001", " AMENDMENT 02",
+-- " AMD 1") and collapses runs of internal whitespace to a single space.
+-- SAM.gov contracting officers publish some amendments as a new notice whose
+-- TITLE has the amendment number appended, which the 09-17 key saw as a
+-- different solicitation entirely. Found 09-29 while refreshing counts for the
+-- wave-7 batch A follow-ups: TX hvac-plumbing read 6 open and was really 5, the
+-- extra row being "... Boiler Chiller Plant Amendment 0002" sitting beside its
+-- own base notice, same agency, same 2026-10-07 deadline.
+--
+-- MEASURED over the whole 3,567-row bids table, not just the open set: the new
+-- key merges 14 rows across 11 groups (12 rows from the amendment suffix, 2 from
+-- the whitespace collapse), and every one of the 11 is a single state, a single
+-- trade and a closing-date span of 14 days or less - i.e. one solicitation whose
+-- deadline moved, which is exactly what this view exists to collapse.
+--
+-- Over-merge check re-run on the new key and compared against the OLD key on the
+-- same data, which is the comparison that matters: multi-row groups 902 -> 908,
+-- groups spanning more than 45 days of closing dates 13 -> 13, groups spanning
+-- more than one state 3 -> 3, and the three multi-state groups are the SAME three
+-- (589A7-21-132 Emergency Power KS/MO, 550-27-111 B58 Roof Repair IL/WI, and the
+-- CT/ME industry-days notice). The new rule therefore adds no over-merge risk of
+-- its own; it only removes double counts.
+--
+-- NOT extended to a bare trailing number or to "Rev 2"/"REVISED": no measured
+-- instance, and a trailing integer is a building number or a phase as often as
+-- it is an amendment. Extend only against a measurement, as here.
+
 create or replace view bids_current as
 select distinct on (
-         lower(regexp_replace(coalesce(title,''), '^[A-Z0-9]{1,6}--', '')),
+         lower(btrim(regexp_replace(
+           regexp_replace(
+             regexp_replace(coalesce(title,''), '^[A-Z0-9]{1,6}--', ''),
+             '[[:space:]|,._-]*(amendment|amd)[ _#-]*[0-9]+[[:space:]]*$', '', 'i'),
+           '[[:space:]]+', ' ', 'g'))),
          coalesce(agency,'')
        )
        *
 from bids
-order by lower(regexp_replace(coalesce(title,''), '^[A-Z0-9]{1,6}--', '')),
+order by lower(btrim(regexp_replace(
+           regexp_replace(
+             regexp_replace(coalesce(title,''), '^[A-Z0-9]{1,6}--', ''),
+             '[[:space:]|,._-]*(amendment|amd)[ _#-]*[0-9]+[[:space:]]*$', '', 'i'),
+           '[[:space:]]+', ' ', 'g'))),
          coalesce(agency,''),
          posted_at desc nulls last,
          id desc;
